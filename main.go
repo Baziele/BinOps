@@ -13,29 +13,30 @@ import (
 
 
 type model struct {
+	ready bool
 	pages []string
 	currentPage int
 	width  int
 	height int
 	styles struct{
-		boarderStyles lipgloss.Style
+		borderStyles lipgloss.Style
 	}
-	generalPage tea.Model
-	staticPage tea.Model
+	generalPage GeneralModel
+	staticPage StaticModel
 	dynamicPage tea.Model
-	stringsPage tea.Model
+	stringsPage StringsModel
 	hexdumpPage tea.Model
 }
 
 func initializeModel() model{
 	m := model{pages: []string{"General", "Static", "Dynamic", "Strings", "Hexdump"}}
-	m.styles.boarderStyles = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).
+	m.styles.borderStyles = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color("39"))
-	m.generalPage = initializeGeneralModel()
-	m.staticPage = initializeStaticModel()
-	m.dynamicPage = initializeDynamicModel()
-	m.stringsPage = initializeStringsModel()
-	m.hexdumpPage = initializeHexdumpModel()
+	// m.generalPage = initializeGeneralModel()
+	// m.staticPage = initializeStaticModel()
+	// m.dynamicPage = initializeDynamicModel()
+	// m.stringsPage = initializeStringsModel()
+	// m.hexdumpPage = initializeHexdumpModel()
 	return m
 }
 
@@ -57,8 +58,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.currentPage = (m.currentPage - 1 + len(m.pages)) % len(m.pages)
 		}
 	case tea.WindowSizeMsg:
+		navHeight := lipgloss.Height(m.navView())
+		borderWidth := lipgloss.Width(m.styles.borderStyles.Render(""))
+		borderHeight := lipgloss.Height(m.styles.borderStyles.Render(""))
+		if !m.ready {
+			m.width = msg.Width
+			m.height = msg.Height
+			contentWidth := m.width - borderWidth
+			contentHeight := m.height - navHeight - borderHeight
+			m.generalPage = initializeGeneralModel(contentWidth, contentHeight)
+			m.staticPage = initializeStaticModel(contentWidth, contentHeight)
+			m.dynamicPage = initializeDynamicModel()
+			m.stringsPage = initializeStringsModel(contentWidth, contentHeight)
+			m.hexdumpPage = initializeHexdumpModel()
+			m.ready = true
+		}
 		m.width = msg.Width
 		m.height = msg.Height
+		m.generalPage.setDimensions( m.width - borderWidth, m.height - navHeight - borderHeight)
+		m.staticPage.setDimensions( m.width - borderWidth, m.height - navHeight)
 	}
 
 	switch m.currentPage{
@@ -95,21 +113,21 @@ func (m model) View() tea.View {
 		return v
 	}
 	nav := m.navView()
-	var currentView tea.View
+	var currentView string
 	switch m.currentPage {
 	case 0:
 		currentView = m.generalPage.View()
 	case 1:
 		currentView = m.staticPage.View()
 	case 2:
-		currentView = m.dynamicPage.View()
+		currentView = m.dynamicPage.View().Content
 	case 3:
 		currentView = m.stringsPage.View()
 	case 4:
-		currentView = m.hexdumpPage.View()
+		currentView = m.hexdumpPage.View().Content
 	}
-	body := lipgloss.JoinVertical(lipgloss.Top, currentView.Content)
-	body = m.styles.boarderStyles.Width(m.width).Height(m.height - lipgloss.Height(nav)).Render(body)
+	body := lipgloss.JoinVertical(lipgloss.Top, currentView)
+	body = m.styles.borderStyles.Width(m.width).Height(m.height - lipgloss.Height(nav)).Render(body)
 	v.SetContent(lipgloss.JoinVertical(lipgloss.Top, nav, body))
 	return v
 }
@@ -131,7 +149,7 @@ func (m model) navView() string{
 		str += style.Foreground(lipgloss.Color("#7D56F4")).Render(separator) + style.Render(  page)
 	}
 
-	return m.styles.boarderStyles.Width(m.width).Render(str)
+	return m.styles.borderStyles.Width(m.width).Render(str)
 }
 
 
