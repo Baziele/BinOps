@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+
 	// "image/color"
 	// "math"
 	// "strings"
@@ -14,6 +16,7 @@ import (
 
 type model struct {
 	ready bool
+	isFileReady bool
 	pages []string
 	currentPage int
 	width  int
@@ -26,10 +29,12 @@ type model struct {
 	dynamicPage tea.Model
 	stringsPage StringsModel
 	hexdumpPage tea.Model
+	binaryName string
+	elfAnalysis ELFAnalysis
 }
 
-func initializeModel() model{
-	m := model{pages: []string{"General", "Static", "Dynamic", "Strings", "Hexdump"}}
+func initializeModel(binaryName string) model{
+	m := model{pages: []string{"General", "Static", "Dynamic", "Strings", "Hexdump"}, binaryName: binaryName}
 	m.styles.borderStyles = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color("39"))
 	// m.generalPage = initializeGeneralModel()
@@ -42,7 +47,7 @@ func initializeModel() model{
 
 
 func (m model) Init() tea.Cmd {
-	return m.generalPage.Init()
+	return analyzeBinary(m.binaryName)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -53,21 +58,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			return m, tea.Quit
 		case "tab":
+			if !m.isFileReady {
+				return m, nil
+			}
 			m.currentPage = (m.currentPage + 1) % len(m.pages)
 		case "shift+tab":
+			if !m.isFileReady {
+				return m, nil
+			}
 			m.currentPage = (m.currentPage - 1 + len(m.pages)) % len(m.pages)
 		}
 	case tea.WindowSizeMsg:
 		navHeight := lipgloss.Height(m.navView())
 		borderWidth := lipgloss.Width(m.styles.borderStyles.Render(""))
 		borderHeight := lipgloss.Height(m.styles.borderStyles.Render(""))
-		if !m.ready {
+		if !m.ready{
 			m.width = msg.Width
 			m.height = msg.Height
 			contentWidth := m.width - borderWidth
 			contentHeight := m.height - navHeight - borderHeight
 			m.generalPage = initializeGeneralModel(contentWidth, contentHeight)
-			m.staticPage = initializeStaticModel(contentWidth, contentHeight)
+			m.staticPage = initializeStaticModel(contentWidth, contentHeight, m.elfAnalysis.File, m.elfAnalysis.Header)
 			m.dynamicPage = initializeDynamicModel()
 			m.stringsPage = initializeStringsModel(contentWidth, contentHeight)
 			m.hexdumpPage = initializeHexdumpModel()
@@ -77,6 +88,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.generalPage.setDimensions( m.width - borderWidth, m.height - navHeight - borderHeight)
 		m.staticPage.setDimensions( m.width - borderWidth, m.height - navHeight)
+	
+	case ELFAnalysis:
+		m.elfAnalysis = msg
+		m.staticPage.elfFile = msg.File
+		m.staticPage.elfHeader = msg.Header
+		m.isFileReady = true
 	}
 
 	switch m.currentPage{
@@ -108,7 +125,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) View() tea.View {
 	var v tea.View
 	v.AltScreen = true
-	if m.width == 0 {
+	if m.width == 0 || !m.isFileReady {
 		v.SetContent("Initializing...")
 		return v
 	}
@@ -156,7 +173,7 @@ func (m model) navView() string{
 
 func main() {
 	p := tea.NewProgram(
-		initializeModel(),
+		initializeModel(os.Args[1]),
 	)
 
 	if _, err := p.Run(); err != nil {

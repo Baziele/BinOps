@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 
+	"debug/elf"
+
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -21,6 +23,8 @@ type StaticModel struct {
 	fileSegments []string
 	content string
 	currentSegment int
+	elfFile    *elf.File
+	elfHeader  ELFStaticHeader
 }
 
 type KeyMap struct {
@@ -41,12 +45,14 @@ var DefaultKeyMap = KeyMap{
 
 
 
-func initializeStaticModel(width, height int) StaticModel {
+func initializeStaticModel(width, height int, elfFile *elf.File, header ELFStaticHeader) StaticModel {
 	m := StaticModel{
 		width: width,
 		height: height,
 		fileSegments: []string{"Program Header", "Section Header", "Symbols", "Dynamic Symbol", "Dynamic", "Relocations"},
 		content: "Static",
+		elfFile: elfFile,
+		elfHeader: header,
 	}
 	b := lipgloss.NormalBorder()
 	b.Right = "├"
@@ -86,24 +92,38 @@ func (m StaticModel) headerView() string{
 	title := m.styles.title.Render("┌┤Headers├")
 	line := strings.Repeat("─", max(0, (m.width/2)-lipgloss.Width(title) - 1))
 	line = lipgloss.JoinHorizontal(lipgloss.Center, title, line, "┐")
-	headerContent := `
-	class: PE32 executable (GUI) Intel 80386, for MS Windows
-	SizeOfOptionalHeader: 224
-	Characteristics: 0x102
-	Machine: 0x14c
-	NumberOfSections: 3
-	TimeDateStamp: 0x5e2b1a5b
-	PointerToSymbolTable: 0
-	NumberOfSymbols: 0
-	OptionalHeaderMagic: 0x10b
-	AddressOfEntryPoint: 0x1000
-	BaseOfCode: 0x1000
-	ImageBase: 0x400000
-	SectionAlignment: 4096
-	FileAlignment: 512`
-	header := m.styles.header.Height(m.height/2 - lipgloss.Height(line)).Render(headerContent)
-	return lipgloss.JoinVertical(lipgloss.Left, line, header)
+	labelStyle := lipgloss.NewStyle().Foreground(lipgloss.Cyan)
+	if m.elfFile == nil {
+		return m.styles.header.Height(m.height/2 - lipgloss.Height(line)).Render(lipgloss.JoinVertical(lipgloss.Left, line, "No ELF file loaded."))
 	}
+
+	h := m.elfHeader
+	var b strings.Builder
+	write := func(label, value string) {
+		b.WriteString(labelStyle.Render(label))
+		b.WriteString(value)
+		b.WriteByte('\n')
+	}
+
+	write("Class: ", h.Class)
+	write("Endianness: ", h.Endianness)
+	write("Version: ", h.Version)
+	write("OS/ABI: ", h.OSABI)
+	write("ABI Version: ", h.ABIVersion)
+	write("Type: ", h.Type)
+	write("Arch: ", h.Arch)
+	write("Entry point address: ", h.EntryAddress)
+	if h.ProgHeaderStart != "" {
+		write("Start of program headers: ", h.ProgHeaderStart)
+		write("Start of section headers: ", h.SectionHeaderStart)
+		write("Flags: ", h.Flags)
+		write("Size of this header: ", h.EhsizeBytes)
+		write("Size of program header: ", h.PhEntSizeBytes)
+	}
+	write("Number of program headers: ", h.ProgramHeaderCount)
+	header := m.styles.header.Height(m.height/2 - lipgloss.Height(line)).Render(strings.TrimSuffix(b.String(), "\n"))
+	return lipgloss.JoinVertical(lipgloss.Left, line, header)
+}
 
 func (m  StaticModel) notesView() string{
 	title := m.styles.title.Render("┌┤Notes├")
