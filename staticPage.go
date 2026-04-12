@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 
 	"debug/elf"
@@ -19,12 +20,12 @@ type StaticModel struct {
 		fileSegment lipgloss.Style
 	}
 	header string
-	notes string
 	fileSegments []string
 	content string
 	currentSegment int
 	elfFile    *elf.File
 	elfHeader  ELFStaticHeader
+	elfNotes   []ELFNoteSection
 }
 
 type KeyMap struct {
@@ -45,7 +46,7 @@ var DefaultKeyMap = KeyMap{
 
 
 
-func initializeStaticModel(width, height int, elfFile *elf.File, header ELFStaticHeader) StaticModel {
+func initializeStaticModel(width, height int, elfFile *elf.File, header ELFStaticHeader, notes []ELFNoteSection) StaticModel {
 	m := StaticModel{
 		width: width,
 		height: height,
@@ -53,6 +54,7 @@ func initializeStaticModel(width, height int, elfFile *elf.File, header ELFStati
 		content: "Static",
 		elfFile: elfFile,
 		elfHeader: header,
+		elfNotes: notes,
 	}
 	b := lipgloss.NormalBorder()
 	b.Right = "├"
@@ -125,16 +127,83 @@ func (m StaticModel) headerView() string{
 	return lipgloss.JoinVertical(lipgloss.Left, line, header)
 }
 
-func (m  StaticModel) notesView() string{
+func (m StaticModel) notesView() string {
 	title := m.styles.title.Render("┌┤Notes├")
-	line := strings.Repeat("─", max(0, (m.width/2)-lipgloss.Width(title) - 1))
+	line := strings.Repeat("─", max(0, (m.width/2)-lipgloss.Width(title)-1))
 	line = lipgloss.JoinHorizontal(lipgloss.Center, title, line, "┐")
-	notesContent := `
-	- The file has a valid PE header with typical characteristics for a Windows executable.
-	- The entry point is at 0x1000, which is common for PE files.
-	- The image base is set to 0x400000, which is the default for many Windows executables.`
-	notes := m.styles.header.Height(m.height/2 - lipgloss.Height(line)).Render(notesContent)
+	innerH := m.height/2 - lipgloss.Height(line)
+
+	displayStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
+	sectionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#7D56F4")).Bold(true)
+	tableHeaderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+	ownerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+	sizeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
+	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
+	detailKeyStyle := lipgloss.NewStyle().Foreground(lipgloss.Cyan)
+	detailMutedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+
+	if m.elfFile == nil {
+		body := m.styles.header.Height(innerH).Render("No ELF file loaded.")
+		return lipgloss.JoinVertical(lipgloss.Left, line, body)
+	}
+	if len(m.elfNotes) == 0 {
+		body := m.styles.header.Height(innerH).Render("No note sections in this ELF file.")
+		return lipgloss.JoinVertical(lipgloss.Left, line, body)
+	}
+
+	var b strings.Builder
+	for _, sec := range m.elfNotes {
+		b.WriteString(displayStyle.Render("Displaying notes found in: "))
+		b.WriteString(sectionStyle.Render(sec.SectionName))
+		b.WriteByte('\n')
+		b.WriteString(tableHeaderStyle.Render("  Owner                Data size        Description"))
+		b.WriteByte('\n')
+		for _, e := range sec.Entries {
+			sizeStr := fmt.Sprintf("0x%08x", e.DataSize)
+			b.WriteString("  ")
+			b.WriteString(ownerStyle.Render(fmt.Sprintf("%-20s", e.Owner)))
+			b.WriteString(" ")
+			b.WriteString(sizeStyle.Render(fmt.Sprintf("%-16s", sizeStr)))
+			b.WriteString(" ")
+			b.WriteString(descStyle.Render(e.Description))
+			b.WriteByte('\n')
+			for _, d := range e.Details {
+				writeNoteDetailLine(&b, d, detailKeyStyle, detailMutedStyle)
+			}
+		}
+		b.WriteByte('\n')
+	}
+	notes := m.styles.header.Height(innerH).Render(strings.TrimSuffix(b.String(), "\n"))
 	return lipgloss.JoinVertical(lipgloss.Left, line, notes)
+}
+
+// writeNoteDetailLine colors leading indentation and a "Key:" prefix like readelf output.
+func writeNoteDetailLine(b *strings.Builder, line string, keyStyle, mutedStyle lipgloss.Style) {
+	if line == "" {
+		return
+	}
+	trimStart := 0
+	for trimStart < len(line) && line[trimStart] == ' ' {
+		trimStart++
+	}
+	pad := line[:trimStart]
+	rest := line[trimStart:]
+	b.WriteString(pad)
+	if strings.HasPrefix(rest, "Properties:") {
+		b.WriteString(mutedStyle.Render(rest))
+		b.WriteByte('\n')
+		return
+	}
+	if idx := strings.Index(rest, ": "); idx >= 0 {
+		key := rest[:idx+1]
+		val := rest[idx+2:]
+		b.WriteString(keyStyle.Render(key))
+		b.WriteString(val)
+		b.WriteByte('\n')
+		return
+	}
+	b.WriteString(rest)
+	b.WriteByte('\n')
 }
 
 func (m StaticModel) fileSegmentsView() string{

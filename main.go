@@ -78,7 +78,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			contentWidth := m.width - borderWidth
 			contentHeight := m.height - navHeight - borderHeight
 			m.generalPage = initializeGeneralModel(contentWidth, contentHeight)
-			m.staticPage = initializeStaticModel(contentWidth, contentHeight, m.elfAnalysis.File, m.elfAnalysis.Header)
+			m.staticPage = initializeStaticModel(contentWidth, contentHeight, m.elfAnalysis.File, m.elfAnalysis.Header, m.elfAnalysis.NoteSections)
 			m.dynamicPage = initializeDynamicModel()
 			m.stringsPage = initializeStringsModel(contentWidth, contentHeight)
 			m.hexdumpPage = initializeHexdumpModel()
@@ -93,6 +93,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.elfAnalysis = msg
 		m.staticPage.elfFile = msg.File
 		m.staticPage.elfHeader = msg.Header
+		m.staticPage.elfNotes = msg.NoteSections
 		m.isFileReady = true
 	}
 
