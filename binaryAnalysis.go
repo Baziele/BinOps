@@ -58,9 +58,10 @@ type ELFNoteSection struct {
 
 // ELFAnalysis bundles an opened ELF file and pre-parsed UI text.
 type ELFAnalysis struct {
-	File          *elf.File
-	Header        ELFStaticHeader
-	NoteSections  []ELFNoteSection
+	File           *elf.File
+	Header         ELFStaticHeader
+	NoteSections   []ELFNoteSection
+	SegmentTables  []ELFStaticTable // same order as StaticModel.fileSegments
 }
 
 func elfClassDisplay(c elf.Class) string {
@@ -344,7 +345,8 @@ func AnalyzeELF(binaryPath string) (*ELFAnalysis, error) {
 	}
 	header := ParseELFStaticHeader(binaryPath, f)
 	notes := ParseELFNotes(f)
-	return &ELFAnalysis{File: f, Header: header, NoteSections: notes}, nil
+	tables := ParseELFSegmentTables(f)
+	return &ELFAnalysis{File: f, Header: header, NoteSections: notes, SegmentTables: tables}, nil
 }
 
 func analyzeBinary(binaryName string) tea.Cmd {
