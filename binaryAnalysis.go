@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -16,29 +17,29 @@ import (
 
 // ELFStaticHeader holds display-ready ELF file header fields for the static UI.
 type ELFStaticHeader struct {
-	Class                string
-	Endianness           string
-	Version              string
-	OSABI                string
-	ABIVersion           string
-	Type                 string
-	Arch                 string
-	EntryAddress         string
-	ProgHeaderStart      string
-	SectionHeaderStart   string
-	Flags                string
-	EhsizeBytes          string
-	PhEntSizeBytes       string
-	ProgramHeaderCount   string
+	Class              string
+	Endianness         string
+	Version            string
+	OSABI              string
+	ABIVersion         string
+	Type               string
+	Arch               string
+	EntryAddress       string
+	ProgHeaderStart    string
+	SectionHeaderStart string
+	Flags              string
+	EhsizeBytes        string
+	PhEntSizeBytes     string
+	ProgramHeaderCount string
 }
 
 // GNU note types (owner name "GNU"); see ELF gABI and binutils readelf.
 const (
-	ntGNUABIVersion       uint32 = 1 // NT_GNU_ABI_TAG
-	ntGNUHwCaps           uint32 = 2
-	ntGNUBuildID          uint32 = 3 // NT_GNU_BUILD_ID
-	ntGNUGoldVersion      uint32 = 4
-	ntGNUPropertyType0    uint32 = 5 // NT_GNU_PROPERTY_TYPE_0
+	ntGNUABIVersion        uint32 = 1 // NT_GNU_ABI_TAG
+	ntGNUHwCaps            uint32 = 2
+	ntGNUBuildID           uint32 = 3 // NT_GNU_BUILD_ID
+	ntGNUGoldVersion       uint32 = 4
+	ntGNUPropertyType0     uint32 = 5 // NT_GNU_PROPERTY_TYPE_0
 	gnuPropertyX86Feat1And uint32 = 0xc0000002
 )
 
@@ -58,10 +59,17 @@ type ELFNoteSection struct {
 
 // ELFAnalysis bundles an opened ELF file and pre-parsed UI text.
 type ELFAnalysis struct {
-	File           *elf.File
-	Header         ELFStaticHeader
-	NoteSections   []ELFNoteSection
-	SegmentTables  []ELFStaticTable // same order as StaticModel.fileSegments
+	File          *elf.File
+	Header        ELFStaticHeader
+	NoteSections  []ELFNoteSection
+	SegmentTables []ELFStaticTable // same order as StaticModel.fileSegments
+	Strings       []ELFStringEntry
+}
+
+// ELFStringEntry represents one printable string extracted from the binary.
+type ELFStringEntry struct {
+	Offset int64
+	Value  string
 }
 
 func elfClassDisplay(c elf.Class) string {
@@ -336,7 +344,6 @@ func ParseELFNotes(f *elf.File) []ELFNoteSection {
 	return out
 }
 
-
 // AnalyzeELF opens the binary, parses it with debug/elf, and builds ELFAnalysis. The caller owns the returned *elf.File and must Close it when finished.
 func AnalyzeELF(binaryPath string) (*ELFAnalysis, error) {
 	f, err := elf.Open(binaryPath)
@@ -346,7 +353,74 @@ func AnalyzeELF(binaryPath string) (*ELFAnalysis, error) {
 	header := ParseELFStaticHeader(binaryPath, f)
 	notes := ParseELFNotes(f)
 	tables := ParseELFSegmentTables(f)
-	return &ELFAnalysis{File: f, Header: header, NoteSections: notes, SegmentTables: tables}, nil
+	extractedStrings, err := ExtractBinaryStrings(binaryPath, 15)
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+	return &ELFAnalysis{
+		File:          f,
+		Header:        header,
+		NoteSections:  notes,
+		SegmentTables: tables,
+		Strings:       extractedStrings,
+	}, nil
+}
+
+// ExtractBinaryStrings scans raw bytes and returns printable ASCII strings.
+// It follows the same extraction rules used in the standalone test implementation.
+func ExtractBinaryStrings(binaryPath string, minLength int) ([]ELFStringEntry, error) {
+	file, err := os.Open(binaryPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var out []ELFStringEntry
+	var current strings.Builder
+	var currentStart int64 = -1
+	var location int64
+
+	buf := make([]byte, 64)
+	for {
+		n, readErr := file.Read(buf)
+		if n > 0 {
+			for i, b := range buf[:n] {
+				if b >= 0x20 && b <= 0x7E {
+					if current.Len() == 0 {
+						currentStart = location + int64(i)
+					}
+					current.WriteByte(b)
+				} else {
+					if current.Len() >= minLength {
+						out = append(out, ELFStringEntry{
+							Offset: currentStart,
+							Value:  current.String(),
+						})
+					}
+					current.Reset()
+					currentStart = -1
+				}
+			}
+			location += int64(n)
+		}
+
+		if readErr != nil {
+			if readErr == io.EOF {
+				break
+			}
+			return nil, readErr
+		}
+	}
+
+	if current.Len() >= minLength {
+		out = append(out, ELFStringEntry{
+			Offset: currentStart,
+			Value:  current.String(),
+		})
+	}
+
+	return out, nil
 }
 
 func analyzeBinary(binaryName string) tea.Cmd {

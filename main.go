@@ -13,27 +13,26 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-
 type model struct {
-	ready bool
+	ready       bool
 	isFileReady bool
-	pages []string
+	pages       []string
 	currentPage int
-	width  int
-	height int
-	styles struct{
+	width       int
+	height      int
+	styles      struct {
 		borderStyles lipgloss.Style
 	}
 	generalPage GeneralModel
-	staticPage StaticModel
+	staticPage  StaticModel
 	dynamicPage tea.Model
 	stringsPage StringsModel
 	hexdumpPage tea.Model
-	binaryName string
+	binaryName  string
 	elfAnalysis ELFAnalysis
 }
 
-func initializeModel(binaryName string) model{
+func initializeModel(binaryName string) model {
 	m := model{pages: []string{"General", "Static", "Dynamic", "Strings", "Hexdump"}, binaryName: binaryName}
 	m.styles.borderStyles = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color("39"))
@@ -44,7 +43,6 @@ func initializeModel(binaryName string) model{
 	// m.hexdumpPage = initializeHexdumpModel()
 	return m
 }
-
 
 func (m model) Init() tea.Cmd {
 	return analyzeBinary(m.binaryName)
@@ -72,7 +70,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		navHeight := lipgloss.Height(m.navView())
 		borderWidth := lipgloss.Width(m.styles.borderStyles.Render(""))
 		borderHeight := lipgloss.Height(m.styles.borderStyles.Render(""))
-		if !m.ready{
+		if !m.ready {
 			m.width = msg.Width
 			m.height = msg.Height
 			contentWidth := m.width - borderWidth
@@ -80,15 +78,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.generalPage = initializeGeneralModel(contentWidth, contentHeight)
 			m.staticPage = initializeStaticModel(contentWidth, contentHeight, m.elfAnalysis.File, m.elfAnalysis.Header, m.elfAnalysis.NoteSections, m.elfAnalysis.SegmentTables)
 			m.dynamicPage = initializeDynamicModel()
-			m.stringsPage = initializeStringsModel(contentWidth, contentHeight)
+			m.stringsPage = initializeStringsModel(contentWidth, contentHeight, m.elfAnalysis.Strings)
 			m.hexdumpPage = initializeHexdumpModel()
 			m.ready = true
 		}
 		m.width = msg.Width
 		m.height = msg.Height
-		m.generalPage.setDimensions( m.width - borderWidth, m.height - navHeight - borderHeight)
-		m.staticPage.setDimensions( m.width - borderWidth, m.height - navHeight - borderHeight)
-	
+		m.generalPage.setDimensions(m.width-borderWidth, m.height-navHeight-borderHeight)
+		m.staticPage.setDimensions(m.width-borderWidth, m.height-navHeight-borderHeight)
+		m.stringsPage.setDimensions(m.width-borderWidth, m.height-navHeight-borderHeight)
+
 	case ELFAnalysis:
 		m.elfAnalysis = msg
 		m.staticPage.elfFile = msg.File
@@ -96,10 +95,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.staticPage.elfNotes = msg.NoteSections
 		m.staticPage.segmentTables = msg.SegmentTables
 		m.staticPage.refreshFileSegmentTable()
+		m.stringsPage.setStrings(msg.Strings)
 		m.isFileReady = true
 	}
 
-	switch m.currentPage{
+	switch m.currentPage {
 	case 0:
 		newGeneralPage, newCmd := m.generalPage.Update(msg)
 		m.generalPage = newGeneralPage
@@ -152,27 +152,25 @@ func (m model) View() tea.View {
 	return v
 }
 
-func (m model) navView() string{
+func (m model) navView() string {
 	str := ""
-	for i, page := range(m.pages){
+	for i, page := range m.pages {
 		isFirst, isCurrentPage := i == 0, i == m.currentPage
 		style := lipgloss.NewStyle()
 		if isCurrentPage {
 			style = style.Bold(true)
-		}else{
+		} else {
 			style = style.Foreground(lipgloss.Color("#7D56F4"))
 		}
 		separator := ""
-		if !isFirst{
+		if !isFirst {
 			separator = " | "
 		}
-		str += style.Foreground(lipgloss.Color("#7D56F4")).Render(separator) + style.Render(  page)
+		str += style.Foreground(lipgloss.Color("#7D56F4")).Render(separator) + style.Render(page)
 	}
 
 	return m.styles.borderStyles.Width(m.width).Render(str)
 }
-
-
 
 func main() {
 	p := tea.NewProgram(
