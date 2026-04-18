@@ -37,7 +37,7 @@ func initializeGeneralModel(width, height int, fileStats ELFStats, dependencies 
 		width:           width,
 		height:          height,
 		content:         "General",
-		applicationName: "BinOps",
+		// applicationName: "BinOps",
 		description:     "The greatest static binary analysis too of all time",
 		repository:      "https://github.com/baziele/binops",
 		creator:         "@baziele",
@@ -47,6 +47,66 @@ func initializeGeneralModel(width, height int, fileStats ELFStats, dependencies 
 		// propertiesViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(15)),
 		// dependenciesViewport: viewport.New(viewport.WithWidth(60), viewport.WithHeight(7)),
 	}
+
+// 	m.applicationName = `
+// █████      ███                                       
+// ▒▒███      ▒▒▒                                        
+//  ▒███████  ████  ████████    ██████  ████████   █████ 
+//  ▒███▒▒███▒▒███ ▒▒███▒▒███  ███▒▒███▒▒███▒▒███ ███▒▒  
+//  ▒███ ▒███ ▒███  ▒███ ▒███ ▒███ ▒███ ▒███ ▒███▒▒█████ 
+//  ▒███ ▒███ ▒███  ▒███ ▒███ ▒███ ▒███ ▒███ ▒███ ▒▒▒▒███
+//  ████████  █████ ████ █████▒▒██████  ▒███████  ██████ 
+// ▒▒▒▒▒▒▒▒  ▒▒▒▒▒ ▒▒▒▒ ▒▒▒▒▒  ▒▒▒▒▒▒   ▒███▒▒▒  ▒▒▒▒▒▒  
+//                                      ▒███             
+//                                      █████            
+//                                     ▒▒▒▒▒             
+// 	`
+
+// 	 m.applicationName = `
+//  ███████████  █████ ██████   █████    ███████    ███████████   █████████ 
+// ░░███░░░░░███░░███ ░░██████ ░░███   ███░░░░░███ ░░███░░░░░███ ███░░░░░███
+//  ░███    ░███ ░███  ░███░███ ░███  ███     ░░███ ░███    ░███░███    ░░░ 
+//  ░██████████  ░███  ░███░░███░███ ░███      ░███ ░██████████ ░░█████████ 
+//  ░███░░░░░███ ░███  ░███ ░░██████ ░███      ░███ ░███░░░░░░   ░░░░░░░░███
+//  ░███    ░███ ░███  ░███  ░░█████ ░░███     ███  ░███         ███    ░███
+//  ███████████  █████ █████  ░░█████ ░░░███████░   █████       ░░█████████ 
+// ░░░░░░░░░░░  ░░░░░ ░░░░░    ░░░░░    ░░░░░░░    ░░░░░         ░░░░░░░░░  
+// 	`
+	
+// 	m.applicationName = `
+// ░▒▓███████▓▒░░▒▓█▓▒░▒▓███████▓▒░ ░▒▓██████▓▒░░▒▓███████▓▒░ ░▒▓███████▓▒░ 
+// ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░        
+// ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░        
+// ░▒▓███████▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓███████▓▒░ ░▒▓██████▓▒░  
+// ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░             ░▒▓█▓▒░ 
+// ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░             ░▒▓█▓▒░ 
+// ░▒▓███████▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░░▒▓██████▓▒░░▒▓█▓▒░      ░▒▓███████▓▒░  
+	// `
+
+// 	m.applicationName = `
+// ██████╗ ██╗███╗   ██╗ ██████╗ ██████╗ ███████╗
+// ██╔══██╗██║████╗  ██║██╔═══██╗██╔══██╗██╔════╝
+// ██████╔╝██║██╔██╗ ██║██║   ██║██████╔╝███████╗
+// ██╔══██╗██║██║╚██╗██║██║   ██║██╔═══╝ ╚════██║
+// ██████╔╝██║██║ ╚████║╚██████╔╝██║     ███████║
+// ╚═════╝ ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝     ╚══════╝
+// `
+
+ 	m.applicationName = `
+▀█████████▄   ▄█  ███▄▄▄▄    ▄██████▄     ▄███████▄    ▄████████ 
+  ███    ███ ███  ███▀▀▀██▄ ███    ███   ███    ███   ███    ███ 
+  ███    ███ ███▌ ███   ███ ███    ███   ███    ███   ███    █▀  
+ ▄███▄▄▄██▀  ███▌ ███   ███ ███    ███   ███    ███   ███        
+▀▀███▀▀▀██▄  ███▌ ███   ███ ███    ███ ▀█████████▀  ▀███████████ 
+  ███    ██▄ ███  ███   ███ ███    ███   ███                 ███ 
+  ███    ███ ███  ███   ███ ███    ███   ███           ▄█    ███ 
+▄█████████▀  █▀    ▀█   █▀   ▀██████▀   ▄████▀       ▄████████▀  
+                                                                 	
+`
+
+// 	m.applicationName = `
+// `
+
 	m.styles.title = lipgloss.NewStyle().Bold(true)
 	m.styles.stats = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderTop(false)        //.Width(min(40, width-2)).Height(min(15, height-2))
 	m.styles.dependencies = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderTop(false) //.Width(min(60, width-2)).Height(min(7, height-2))
@@ -92,8 +152,8 @@ func (m GeneralModel) Update(msg tea.Msg) (GeneralModel, tea.Cmd) {
 
 func (m GeneralModel) View() string {
 
-	applicationName := lipgloss.NewStyle().Foreground(lipgloss.Color("#7D56F4")).Render(m.applicationName)
-	description := lipgloss.NewStyle().Underline(true).Render(m.description) //BorderBottom(true)
+	applicationName := lipgloss.NewStyle().Render(m.applicationName) //.Foreground(lipgloss.Color("#7D56F4")).Render(m.applicationName)
+	description := lipgloss.NewStyle().Foreground(lipgloss.BrightMagenta).Render(m.description) //BorderBottom(true)
 	repository := lipgloss.NewStyle().Hyperlink(m.repository).Render(m.repository)
 	creator := lipgloss.NewStyle().Italic(true).Foreground(lipgloss.Color("#7D56F4")).Render(m.creator)
 	filename := lipgloss.NewStyle().Render(m.filename)
@@ -152,7 +212,7 @@ func (m GeneralModel) statsView() string {
 	write("Modified: ", optionalTime(m.fileStats.LastModificationTime, m.fileStats.HasLastModTime))
 
 	fullContent := m.styles.stats.Render(contents.String())
-	title := m.styles.title.Render("┌┤Stats├")
+	title := m.styles.title.Render("┌|Stats|")
 	line := strings.Repeat("─", max(0, lipgloss.Width(fullContent)-lipgloss.Width(title)-1))
 	line = lipgloss.JoinHorizontal(lipgloss.Center, title, line, "┐")
 	return lipgloss.JoinVertical(lipgloss.Left, line, fullContent)
@@ -197,7 +257,7 @@ func (m GeneralModel) dependenciesView() string {
 	}
 
 	fullContent := m.styles.dependencies.Render(t.Render())
-	title := m.styles.title.Render("┌┤Dependencies├")
+	title := m.styles.title.Render("┌|Dependencies|")
 	line := strings.Repeat("─", max(0, lipgloss.Width(fullContent)-lipgloss.Width(title)-1))
 	line = lipgloss.JoinHorizontal(lipgloss.Center, title, line, "┐")
 	return lipgloss.JoinVertical(lipgloss.Left, line, fullContent)

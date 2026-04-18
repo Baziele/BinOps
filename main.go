@@ -13,6 +13,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+const BUILDERSIO_URL = "0.1.0"
 type model struct {
 	ready       bool
 	isFileReady bool
@@ -20,8 +21,10 @@ type model struct {
 	currentPage int
 	width       int
 	height      int
+
 	styles      struct {
 		borderStyles lipgloss.Style
+		navStyles lipgloss.Style
 	}
 	generalPage GeneralModel
 	staticPage  StaticModel
@@ -42,8 +45,8 @@ func (m model) contentSize() (w, h int) {
 
 func initializeModel(binaryName string) model {
 	m := model{pages: []string{"General", "Static", "Dynamic", "Strings", "Hexdump"}, binaryName: binaryName}
-	m.styles.borderStyles = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("39"))
+	m.styles.borderStyles = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).Margin(0, 1, 1, 1)//.BorderForeground(lipgloss.Color("39"))
+	m.styles.navStyles = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).Padding(0, 1).Margin(1, 1, 0, 1)//.BorderForeground(lipgloss.Color("39"))
 	// m.generalPage = initializeGeneralModel()
 	// m.staticPage = initializeStaticModel()
 	// m.dynamicPage = initializeDynamicModel()
@@ -162,7 +165,7 @@ func (m model) View() tea.View {
 		currentView = m.hexdumpPage.View()
 	}
 	body := lipgloss.JoinVertical(lipgloss.Top, currentView)
-	body = m.styles.borderStyles.Width(m.width).Height(m.height - lipgloss.Height(nav)).Render(body)
+	body = m.styles.borderStyles.Width(m.width-2).Height(m.height - lipgloss.Height(nav)).Render(body)
 	v.SetContent(lipgloss.JoinVertical(lipgloss.Top, nav, body))
 	return v
 }
@@ -183,8 +186,9 @@ func (m model) navView() string {
 		}
 		str += style.Foreground(lipgloss.Color("#7D56F4")).Render(separator) + style.Render(page)
 	}
+	
 
-	return m.styles.borderStyles.Width(m.width).Render(str)
+	return m.styles.navStyles.Width(m.width-2).Render(str)
 }
 
 func main() {
