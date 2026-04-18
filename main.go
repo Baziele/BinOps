@@ -27,9 +27,17 @@ type model struct {
 	staticPage  StaticModel
 	dynamicPage tea.Model
 	stringsPage StringsModel
-	hexdumpPage tea.Model
+	hexdumpPage HexdumpModel
 	binaryName  string
 	elfAnalysis ELFAnalysis
+}
+
+// contentSize returns the inner dimensions for page content (inside border, below nav).
+func (m model) contentSize() (w, h int) {
+	navHeight := lipgloss.Height(m.navView())
+	borderWidth := lipgloss.Width(m.styles.borderStyles.Render(""))
+	borderHeight := lipgloss.Height(m.styles.borderStyles.Render(""))
+	return m.width - borderWidth, m.height - navHeight - borderHeight
 }
 
 func initializeModel(binaryName string) model {
@@ -79,7 +87,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.staticPage = initializeStaticModel(contentWidth, contentHeight, m.elfAnalysis.File, m.elfAnalysis.Header, m.elfAnalysis.NoteSections, m.elfAnalysis.SegmentTables)
 			m.dynamicPage = initializeDynamicModel()
 			m.stringsPage = initializeStringsModel(contentWidth, contentHeight, m.elfAnalysis.Strings)
-			m.hexdumpPage = initializeHexdumpModel()
+			m.hexdumpPage = initializeHexdumpModel(contentWidth, contentHeight, m.elfAnalysis.FileBytes)
 			m.ready = true
 		}
 		m.width = msg.Width
@@ -87,6 +95,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.generalPage.setDimensions(m.width-borderWidth, m.height-navHeight-borderHeight)
 		m.staticPage.setDimensions(m.width-borderWidth, m.height-navHeight-borderHeight)
 		m.stringsPage.setDimensions(m.width-borderWidth, m.height-navHeight-borderHeight)
+		m.hexdumpPage.setDimensions(m.width-borderWidth, m.height-navHeight-borderHeight)
 
 	case ELFAnalysis:
 		m.elfAnalysis = msg
@@ -96,6 +105,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.staticPage.segmentTables = msg.SegmentTables
 		m.staticPage.refreshFileSegmentTable()
 		m.stringsPage.setStrings(msg.Strings)
+		if m.ready && m.width > 0 {
+			cw, ch := m.contentSize()
+			m.hexdumpPage = initializeHexdumpModel(cw, ch, msg.FileBytes)
+		}
 		m.isFileReady = true
 	}
 
@@ -144,7 +157,7 @@ func (m model) View() tea.View {
 	case 3:
 		currentView = m.stringsPage.View()
 	case 4:
-		currentView = m.hexdumpPage.View().Content
+		currentView = m.hexdumpPage.View()
 	}
 	body := lipgloss.JoinVertical(lipgloss.Top, currentView)
 	body = m.styles.borderStyles.Width(m.width).Height(m.height - lipgloss.Height(nav)).Render(body)

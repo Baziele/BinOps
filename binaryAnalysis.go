@@ -60,6 +60,7 @@ type ELFNoteSection struct {
 // ELFAnalysis bundles an opened ELF file and pre-parsed UI text.
 type ELFAnalysis struct {
 	File          *elf.File
+	FileBytes     []byte // full raw contents of the binary (for Hexdump, etc.)
 	Header        ELFStaticHeader
 	NoteSections  []ELFNoteSection
 	SegmentTables []ELFStaticTable // same order as StaticModel.fileSegments
@@ -346,6 +347,10 @@ func ParseELFNotes(f *elf.File) []ELFNoteSection {
 
 // AnalyzeELF opens the binary, parses it with debug/elf, and builds ELFAnalysis. The caller owns the returned *elf.File and must Close it when finished.
 func AnalyzeELF(binaryPath string) (*ELFAnalysis, error) {
+	fileBytes, err := os.ReadFile(binaryPath)
+	if err != nil {
+		return nil, err
+	}
 	f, err := elf.Open(binaryPath)
 	if err != nil {
 		return nil, err
@@ -360,6 +365,7 @@ func AnalyzeELF(binaryPath string) (*ELFAnalysis, error) {
 	}
 	return &ELFAnalysis{
 		File:          f,
+		FileBytes:     fileBytes,
 		Header:        header,
 		NoteSections:  notes,
 		SegmentTables: tables,
