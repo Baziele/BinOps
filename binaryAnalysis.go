@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"debug/elf"
 
@@ -67,27 +66,32 @@ type ELFAnalysis struct {
 	NoteSections  []ELFNoteSection
 	SegmentTables []ELFStaticTable // same order as StaticModel.fileSegments
 	Strings       []ELFStringEntry
-	Stats			ELFStats
-	Dependencies []ELFDependency
+	Stats         ELFStats
+	Dependencies  []ELFDependency
 }
 
-
-
 type ELFStats struct {
-	FileSize int64
-	Blocks int64
-	BlockSize int64
-	Links uint64
-	UID uint32
-	GID uint32
-	LastAccessTime int64
+	FileSize             int64
+	Blocks               int64
+	BlockSize            int64
+	Links                uint64
+	UID                  uint32
+	GID                  uint32
+	LastAccessTime       int64
 	LastModificationTime int64
+	HasBlocks            bool
+	HasBlockSize         bool
+	HasLinks             bool
+	HasUID               bool
+	HasGID               bool
+	HasLastAccessTime    bool
+	HasLastModTime       bool
 }
 
 type ELFDependency struct {
 	LibraryName string
 	LibraryPath string
-	Found bool
+	Found       bool
 }
 
 // ELFStringEntry represents one printable string extracted from the binary.
@@ -368,34 +372,17 @@ func ParseELFNotes(f *elf.File) []ELFNoteSection {
 	return out
 }
 
-
-func ParseElfStats(f *elf.File, binaryPath string) ELFStats {
+func ParseElfStats(_ *elf.File, binaryPath string) ELFStats {
 	var out ELFStats
 	fileInfo, err := os.Stat(binaryPath)
 	if err != nil {
 		return out
 	}
-	stat := fileInfo.Sys().(*syscall.Stat_t)
 	out.FileSize = fileInfo.Size()
-	out.Blocks = stat.Blocks
-	out.BlockSize = stat.Blksize
-	out.Links = stat.Nlink
-	out.UID = stat.Uid
-	out.GID = stat.Gid
-	out.LastAccessTime = stat.Atim.Sec
-	out.LastModificationTime = stat.Mtim.Sec
+	out.LastModificationTime = fileInfo.ModTime().Unix()
+	out.HasLastModTime = true
+	populateELFStats(&out, fileInfo)
 	return out
-}
-
-
-
-var standardPaths = []string{
-	"/lib",
-	"/lib64",
-	"/usr/lib",
-	"/usr/lib64",
-	"/usr/local/lib",
-	"/usr/lib/x86_64-linux-gnu", // Common on Ubuntu/Debian
 }
 
 func ParseElfDependencies(f *elf.File, binaryPath string) []ELFDependency {
@@ -409,25 +396,18 @@ func ParseElfDependencies(f *elf.File, binaryPath string) []ELFDependency {
 
 	for _, lib := range libs {
 		foundPath := ""
-		
+
 		// 2. Check Local Directory first (mimics $ORIGIN)
 		localPath := filepath.Join(binaryDir, lib)
 		if _, err := os.Stat(localPath); err == nil {
 			foundPath = localPath
 		} else {
-			// 3. Check Standard System Paths
-			for _, searchPath := range standardPaths {
-				fullPath := filepath.Join(searchPath, lib)
-				if _, err := os.Stat(fullPath); err == nil {
-					foundPath = fullPath
-					break
-				}
-			}
+			foundPath = resolveSystemELFDependencyPath(lib)
 		}
 		out = append(out, ELFDependency{
 			LibraryName: lib,
 			LibraryPath: foundPath,
-			Found: foundPath != "",
+			Found:       foundPath != "",
 		})
 	}
 	return out
