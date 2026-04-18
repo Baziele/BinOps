@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"debug/elf"
 
@@ -65,6 +67,27 @@ type ELFAnalysis struct {
 	NoteSections  []ELFNoteSection
 	SegmentTables []ELFStaticTable // same order as StaticModel.fileSegments
 	Strings       []ELFStringEntry
+	Stats			ELFStats
+	Dependencies []ELFDependency
+}
+
+
+
+type ELFStats struct {
+	FileSize int64
+	Blocks int64
+	BlockSize int64
+	Links uint64
+	UID uint32
+	GID uint32
+	LastAccessTime int64
+	LastModificationTime int64
+}
+
+type ELFDependency struct {
+	LibraryName string
+	LibraryPath string
+	Found bool
 }
 
 // ELFStringEntry represents one printable string extracted from the binary.
@@ -345,6 +368,71 @@ func ParseELFNotes(f *elf.File) []ELFNoteSection {
 	return out
 }
 
+
+func ParseElfStats(f *elf.File, binaryPath string) ELFStats {
+	var out ELFStats
+	fileInfo, err := os.Stat(binaryPath)
+	if err != nil {
+		return out
+	}
+	stat := fileInfo.Sys().(*syscall.Stat_t)
+	out.FileSize = fileInfo.Size()
+	out.Blocks = stat.Blocks
+	out.BlockSize = stat.Blksize
+	out.Links = stat.Nlink
+	out.UID = stat.Uid
+	out.GID = stat.Gid
+	out.LastAccessTime = stat.Atim.Sec
+	out.LastModificationTime = stat.Mtim.Sec
+	return out
+}
+
+
+
+var standardPaths = []string{
+	"/lib",
+	"/lib64",
+	"/usr/lib",
+	"/usr/lib64",
+	"/usr/local/lib",
+	"/usr/lib/x86_64-linux-gnu", // Common on Ubuntu/Debian
+}
+
+func ParseElfDependencies(f *elf.File, binaryPath string) []ELFDependency {
+	var out []ELFDependency
+	libs, err := f.ImportedLibraries()
+	if err != nil {
+		return out
+	}
+
+	binaryDir := filepath.Dir(binaryPath)
+
+	for _, lib := range libs {
+		foundPath := ""
+		
+		// 2. Check Local Directory first (mimics $ORIGIN)
+		localPath := filepath.Join(binaryDir, lib)
+		if _, err := os.Stat(localPath); err == nil {
+			foundPath = localPath
+		} else {
+			// 3. Check Standard System Paths
+			for _, searchPath := range standardPaths {
+				fullPath := filepath.Join(searchPath, lib)
+				if _, err := os.Stat(fullPath); err == nil {
+					foundPath = fullPath
+					break
+				}
+			}
+		}
+		out = append(out, ELFDependency{
+			LibraryName: lib,
+			LibraryPath: foundPath,
+			Found: foundPath != "",
+		})
+	}
+	return out
+}
+
 // AnalyzeELF opens the binary, parses it with debug/elf, and builds ELFAnalysis. The caller owns the returned *elf.File and must Close it when finished.
 func AnalyzeELF(binaryPath string) (*ELFAnalysis, error) {
 	fileBytes, err := os.ReadFile(binaryPath)
@@ -358,6 +446,8 @@ func AnalyzeELF(binaryPath string) (*ELFAnalysis, error) {
 	header := ParseELFStaticHeader(binaryPath, f)
 	notes := ParseELFNotes(f)
 	tables := ParseELFSegmentTables(f)
+	stats := ParseElfStats(f, binaryPath)
+	dependencies := ParseElfDependencies(f, binaryPath)
 	extractedStrings, err := ExtractBinaryStrings(binaryPath, 15)
 	if err != nil {
 		f.Close()
@@ -370,6 +460,8 @@ func AnalyzeELF(binaryPath string) (*ELFAnalysis, error) {
 		NoteSections:  notes,
 		SegmentTables: tables,
 		Strings:       extractedStrings,
+		Stats:         stats,
+		Dependencies:  dependencies,
 	}, nil
 }
 
