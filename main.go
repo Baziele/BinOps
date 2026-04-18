@@ -21,6 +21,7 @@ type model struct {
 	currentPage int
 	width       int
 	height      int
+	theme       Theme
 
 	styles      struct {
 		borderStyles lipgloss.Style
@@ -44,9 +45,20 @@ func (m model) contentSize() (w, h int) {
 }
 
 func initializeModel(binaryName string) model {
-	m := model{pages: []string{"General", "Static", "Dynamic", "Strings", "Hexdump"}, binaryName: binaryName}
-	m.styles.borderStyles = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).Margin(0, 1, 1, 1)//.BorderForeground(lipgloss.Color("39"))
-	m.styles.navStyles = lipgloss.NewStyle().BorderStyle(lipgloss.NormalBorder()).Padding(0, 1).Margin(1, 1, 0, 1)//.BorderForeground(lipgloss.Color("39"))
+	m := model{
+		pages:      []string{"General", "Static", "Dynamic", "Strings", "Hexdump"},
+		binaryName: binaryName,
+		theme:      GetTheme(ActiveTheme),
+	}
+	m.styles.borderStyles = lipgloss.NewStyle().
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(m.theme.Border).
+		Margin(0, 1, 1, 1)
+	m.styles.navStyles = lipgloss.NewStyle().
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(m.theme.Border).
+		Padding(0, 1).
+		Margin(1, 1, 0, 1)
 	// m.generalPage = initializeGeneralModel()
 	// m.staticPage = initializeStaticModel()
 	// m.dynamicPage = initializeDynamicModel()
@@ -86,11 +98,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.height = msg.Height
 			contentWidth := m.width - borderWidth
 			contentHeight := m.height - navHeight - borderHeight
-			m.generalPage = initializeGeneralModel(contentWidth, contentHeight, m.elfAnalysis.Stats, m.elfAnalysis.Dependencies)
-			m.staticPage = initializeStaticModel(contentWidth, contentHeight, m.elfAnalysis.File, m.elfAnalysis.Header, m.elfAnalysis.NoteSections, m.elfAnalysis.SegmentTables)
+			m.generalPage = initializeGeneralModel(contentWidth, contentHeight, m.elfAnalysis.Stats, m.elfAnalysis.Dependencies, m.theme)
+			m.staticPage = initializeStaticModel(contentWidth, contentHeight, m.elfAnalysis.File, m.elfAnalysis.Header, m.elfAnalysis.NoteSections, m.elfAnalysis.SegmentTables, m.theme)
 			m.dynamicPage = initializeDynamicModel()
-			m.stringsPage = initializeStringsModel(contentWidth, contentHeight, m.elfAnalysis.Strings)
-			m.hexdumpPage = initializeHexdumpModel(contentWidth, contentHeight, m.binaryName, m.elfAnalysis.FileBytes)
+			m.stringsPage = initializeStringsModel(contentWidth, contentHeight, m.elfAnalysis.Strings, m.theme)
+			m.hexdumpPage = initializeHexdumpModel(contentWidth, contentHeight, m.binaryName, m.elfAnalysis.FileBytes, m.theme)
 			m.ready = true
 		}
 		m.width = msg.Width
@@ -112,7 +124,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.stringsPage.setStrings(msg.Strings)
 		if m.ready && m.width > 0 {
 			cw, ch := m.contentSize()
-			m.hexdumpPage = initializeHexdumpModel(cw, ch, m.binaryName, msg.FileBytes)
+			m.hexdumpPage = initializeHexdumpModel(cw, ch, m.binaryName, msg.FileBytes, m.theme)
 		}
 		m.isFileReady = true
 	}
@@ -178,13 +190,13 @@ func (m model) navView() string {
 		if isCurrentPage {
 			style = style.Bold(true)
 		} else {
-			style = style.Foreground(lipgloss.Color("#7D56F4"))
+			style = style.Foreground(m.theme.NavAccent)
 		}
 		separator := ""
 		if !isFirst {
 			separator = " | "
 		}
-		str += style.Foreground(lipgloss.Color("#7D56F4")).Render(separator) + style.Render(page)
+		str += style.Foreground(m.theme.NavAccent).Render(separator) + style.Render(page)
 	}
 	
 

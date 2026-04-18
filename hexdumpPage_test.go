@@ -56,7 +56,7 @@ func TestHexDocumentSaveClearsDirtyState(t *testing.T) {
 }
 
 func TestHexdumpModelApplyHexDigitEditsAndAdvances(t *testing.T) {
-	model := initializeHexdumpModel(80, 20, "sample.bin", []byte{0x12, 0x34, 0x56})
+	model := initializeHexdumpModel(80, 20, "sample.bin", []byte{0x12, 0x34, 0x56}, GetTheme(ActiveTheme))
 	model.view.editMode = true
 	model.view.highNibble = true
 
@@ -91,7 +91,7 @@ func TestHexdumpModelRenderVisibleRowsUsesWindowedRows(t *testing.T) {
 		0x04, 0x05, 0x06, 0x07,
 		0x08, 0x09, 0x0A, 0x0B,
 		0x0C, 0x0D, 0x0E, 0x0F,
-	})
+	}, GetTheme(ActiveTheme))
 	model.view.bytesPerRow = 4
 	model.view.visibleRows = 2
 	model.view.topRow = 1
@@ -122,7 +122,7 @@ func BenchmarkHexdumpVisibleWindowNavigation(b *testing.B) {
 		}
 
 		b.Run(fmt.Sprintf("%dKB", size/1024), func(b *testing.B) {
-			model := initializeHexdumpModel(120, 40, "sample.bin", data)
+			model := initializeHexdumpModel(120, 40, "sample.bin", data, GetTheme(ActiveTheme))
 			b.ReportAllocs()
 			b.ResetTimer()
 

@@ -145,6 +145,7 @@ type hexdumpPalette struct {
 type HexdumpModel struct {
 	width      int
 	height     int
+	theme      Theme
 	binaryPath string
 	document   *HexDocument
 	view       HexViewState
@@ -196,61 +197,62 @@ var HexdumpDefaultKeyMap = HexdumpKeyMap{
 
 const converterShortRead = "EOF"
 
-func hexdumpByteForeground(b byte) color.Color {
+func hexdumpByteForeground(theme Theme, b byte) color.Color {
 	switch {
 	case b == 0x00:
-		return lipgloss.Color("#5C6370")
+		return theme.Hexdump.Null
 	case b == 0x09 || b == 0x20:
-		return lipgloss.Color("#7A8FA3")
+		return theme.Hexdump.Space
 	case b >= 0x80:
-		return lipgloss.Color("#9A84B8")
+		return theme.Hexdump.High
 	case (b >= 0x01 && b <= 0x1F) || b == 0x7F:
-		return lipgloss.Color("#B08B68")
+		return theme.Hexdump.Control
 	case b >= 0x21 && b <= 0x7E:
-		return lipgloss.Color("#7FAE7B")
+		return theme.Hexdump.Printable
 	default:
-		return lipgloss.Color("#C8CCD4")
+		return theme.Hexdump.Standard
 	}
 }
 
-func newHexCellStyles(fg color.Color) hexCellStyles {
+func newHexCellStyles(theme Theme, fg color.Color) hexCellStyles {
 	base := lipgloss.NewStyle().Foreground(fg)
 	return hexCellStyles{
 		normal:         base,
-		selected:       base.Background(lipgloss.Color("#4B5263")).Foreground(lipgloss.Color("#E6EAF2")),
+		selected:       base.Background(theme.Hexdump.SelectedBG).Foreground(theme.Hexdump.SelectedFG),
 		edited:         base.Underline(true).Bold(true),
-		selectedEdited: base.Background(lipgloss.Color("#4B5263")).Foreground(lipgloss.Color("#E6EAF2")).Underline(true).Bold(true),
+		selectedEdited: base.Background(theme.Hexdump.SelectedBG).Foreground(theme.Hexdump.SelectedFG).Underline(true).Bold(true),
 	}
 }
 
-func newHexdumpPalette() hexdumpPalette {
+func newHexdumpPalette(theme Theme) hexdumpPalette {
 	return hexdumpPalette{
-		null:      newHexCellStyles(hexdumpByteForeground(0x00)),
-		space:     newHexCellStyles(hexdumpByteForeground(0x20)),
-		high:      newHexCellStyles(hexdumpByteForeground(0x80)),
-		control:   newHexCellStyles(hexdumpByteForeground(0x01)),
-		printable: newHexCellStyles(hexdumpByteForeground(0x21)),
-		standard:  newHexCellStyles(lipgloss.Color("#C8CCD4")),
+		null:      newHexCellStyles(theme, hexdumpByteForeground(theme, 0x00)),
+		space:     newHexCellStyles(theme, hexdumpByteForeground(theme, 0x20)),
+		high:      newHexCellStyles(theme, hexdumpByteForeground(theme, 0x80)),
+		control:   newHexCellStyles(theme, hexdumpByteForeground(theme, 0x01)),
+		printable: newHexCellStyles(theme, hexdumpByteForeground(theme, 0x21)),
+		standard:  newHexCellStyles(theme, theme.Hexdump.Standard),
 	}
 }
 
-func initializeHexdumpModel(width, height int, binaryPath string, fileBytes []byte) HexdumpModel {
+func initializeHexdumpModel(width, height int, binaryPath string, fileBytes []byte, theme Theme) HexdumpModel {
 	m := HexdumpModel{
 		width:         width,
 		height:        height,
+		theme:         theme,
 		binaryPath:    binaryPath,
 		document:      newHexDocument(fileBytes),
 		rowCache:      make(map[int]renderedHexRow),
-		palette:       newHexdumpPalette(),
+		palette:       newHexdumpPalette(theme),
 		notifications: "Read-only mode. Press i to edit, ctrl+s to save.",
 	}
 	m.view.byteOrder = binary.LittleEndian
 	m.view.highNibble = true
-	m.styles.title = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Cyan)
-	m.styles.address = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderTop(false)
-	m.styles.hex = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderTop(false)
-	m.styles.ascii = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderTop(false)
-	m.styles.selectedAddress = lipgloss.NewStyle().Background(lipgloss.Color("#4B5263")).Foreground(lipgloss.Color("#E6EAF2")).Bold(true)
+	m.styles.title = lipgloss.NewStyle().Bold(true).Foreground(theme.PanelTitle)
+	m.styles.address = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(theme.Border).BorderTop(false)
+	m.styles.hex = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(theme.Border).BorderTop(false)
+	m.styles.ascii = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(theme.Border).BorderTop(false)
+	m.styles.selectedAddress = lipgloss.NewStyle().Background(theme.Hexdump.SelectedBG).Foreground(theme.Hexdump.SelectedFG).Bold(true)
 	m.setDimensions(width, height)
 	return m
 }
@@ -339,7 +341,9 @@ func (m *HexdumpModel) setDimensions(width, height int) {
 	converterWidth := max(18, width/4)
 	m.styles.converter = lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
+		BorderForeground(m.theme.Border).
 		BorderTop(false).
+		Foreground(m.theme.Body).
 		Width(converterWidth).
 		Height(2)
 

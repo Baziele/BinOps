@@ -12,6 +12,7 @@ import (
 type GeneralModel struct {
 	width                int
 	height               int
+	theme                Theme
 	applicationName      string
 	description          string
 	repository           string
@@ -29,13 +30,18 @@ type GeneralModel struct {
 		stats        lipgloss.Style
 		dependencies lipgloss.Style
 		label        lipgloss.Style
+		description  lipgloss.Style
+		creator      lipgloss.Style
+		depHeader    lipgloss.Style
+		depSelected  lipgloss.Style
 	}
 }
 
-func initializeGeneralModel(width, height int, fileStats ELFStats, dependencies []ELFDependency) GeneralModel {
+func initializeGeneralModel(width, height int, fileStats ELFStats, dependencies []ELFDependency, theme Theme) GeneralModel {
 	m := GeneralModel{
 		width:           width,
 		height:          height,
+		theme:           theme,
 		content:         "General",
 		// applicationName: "BinOps",
 		description:     "The greatest static binary analysis too of all time",
@@ -107,10 +113,20 @@ func initializeGeneralModel(width, height int, fileStats ELFStats, dependencies 
 // 	m.applicationName = `
 // `
 
-	m.styles.title = lipgloss.NewStyle().Bold(true)
-	m.styles.stats = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderTop(false)        //.Width(min(40, width-2)).Height(min(15, height-2))
-	m.styles.dependencies = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderTop(false) //.Width(min(60, width-2)).Height(min(7, height-2))
-	m.styles.label = lipgloss.NewStyle().Foreground(lipgloss.Cyan)
+	m.styles.title = lipgloss.NewStyle().Bold(true).Foreground(theme.PanelTitle)
+	m.styles.stats = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(theme.Border).
+		BorderTop(false)
+	m.styles.dependencies = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(theme.Border).
+		BorderTop(false)
+	m.styles.label = lipgloss.NewStyle().Foreground(theme.Label)
+	m.styles.description = lipgloss.NewStyle().Foreground(theme.Description)
+	m.styles.creator = lipgloss.NewStyle().Italic(true).Foreground(theme.Creator)
+	m.styles.depHeader = lipgloss.NewStyle().Bold(true).Foreground(theme.Label)
+	m.styles.depSelected = lipgloss.NewStyle().Foreground(theme.SelectionFG).Background(theme.SelectionBG)
 	// m.propertiesViewport.SetContent(m.propertiesView())
 	// m.dependenciesViewport.SetContent(m.dependenciesView())
 
@@ -152,11 +168,11 @@ func (m GeneralModel) Update(msg tea.Msg) (GeneralModel, tea.Cmd) {
 
 func (m GeneralModel) View() string {
 
-	applicationName := lipgloss.NewStyle().Render(m.applicationName) //.Foreground(lipgloss.Color("#7D56F4")).Render(m.applicationName)
-	description := lipgloss.NewStyle().Foreground(lipgloss.BrightMagenta).Render(m.description) //BorderBottom(true)
+	applicationName := lipgloss.NewStyle().Foreground(m.theme.Body).Render(m.applicationName)
+	description := m.styles.description.Render(m.description)
 	repository := lipgloss.NewStyle().Hyperlink(m.repository).Render(m.repository)
-	creator := lipgloss.NewStyle().Italic(true).Foreground(lipgloss.Color("#7D56F4")).Render(m.creator)
-	filename := lipgloss.NewStyle().Render(m.filename)
+	creator := m.styles.creator.Render(m.creator)
+	filename := lipgloss.NewStyle().Foreground(m.theme.BodyAlt).Render(m.filename)
 	properties := m.statsView()
 	dependencies := m.dependenciesView()
 
@@ -234,12 +250,10 @@ func (m GeneralModel) dependenciesView() string {
 		YOffset(m.dependenciesOffset).
 		StyleFunc(func(row, _ int) lipgloss.Style {
 			if row == table.HeaderRow {
-				return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Cyan)
+				return m.styles.depHeader
 			}
 			if row == m.dependenciesSelected {
-				return lipgloss.NewStyle().
-					Foreground(lipgloss.Color("230")).
-					Background(lipgloss.Color("62"))
+				return m.styles.depSelected
 			}
 			return lipgloss.NewStyle()
 		})

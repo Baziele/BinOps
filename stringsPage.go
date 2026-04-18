@@ -12,6 +12,7 @@ import (
 type StringsModel struct {
 	height int
 	width  int
+	theme  Theme
 	styles struct {
 		title       lipgloss.Style
 		border      lipgloss.Style
@@ -25,19 +26,28 @@ type StringsModel struct {
 	viewport viewport.Model
 }
 
-func initializeStringsModel(width, height int, entries []ELFStringEntry) StringsModel {
+func initializeStringsModel(width, height int, entries []ELFStringEntry, theme Theme) StringsModel {
 	m := StringsModel{
 		width:   width,
 		height:  height,
+		theme:   theme,
 		content: "",
 	}
-	m.styles.title = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("230")).Background(lipgloss.Color("63")).Padding(0, 1)
-	m.styles.border = lipgloss.NewStyle().Foreground(lipgloss.Color("63"))
-	m.styles.footerInfo = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("229")).Background(lipgloss.Color("63")).Padding(0, 1)
-	m.styles.offset = lipgloss.NewStyle().Foreground(lipgloss.Color("117")).Bold(true)
-	m.styles.value = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
-	m.styles.valueAlt = lipgloss.NewStyle().Foreground(lipgloss.Color("250"))
-	m.styles.emptyNotice = lipgloss.NewStyle().Foreground(lipgloss.Color("244")).Italic(true)
+	m.styles.title = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(theme.StringsTitleFG).
+		Background(theme.StringsTitleBG).
+		Padding(0, 1)
+	m.styles.border = lipgloss.NewStyle().Foreground(theme.StringsTitleBG)
+	m.styles.footerInfo = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(theme.StringsFooterFG).
+		Background(theme.StringsFooterBG).
+		Padding(0, 1)
+	m.styles.offset = lipgloss.NewStyle().Foreground(theme.StringsOffset).Bold(true)
+	m.styles.value = lipgloss.NewStyle().Foreground(theme.Body)
+	m.styles.valueAlt = lipgloss.NewStyle().Foreground(theme.BodyAlt)
+	m.styles.emptyNotice = lipgloss.NewStyle().Foreground(theme.Muted).Italic(true)
 	m.viewport = viewport.New(viewport.WithWidth(width), viewport.WithHeight(m.viewportHeight(height)))
 	m.setStrings(entries)
 
