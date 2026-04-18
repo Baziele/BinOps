@@ -362,7 +362,7 @@ func (m *HexdumpModel) readAt(n int) ([]byte, bool) {
 }
 
 func (m *HexdumpModel) totalRows() int {
-	if m.document.Len() == 0 {
+	if m.document.Len() == 0 || m.view.bytesPerRow == 0 {
 		return 0
 	}
 	return (m.document.Len()-1)/m.view.bytesPerRow + 1
