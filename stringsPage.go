@@ -91,11 +91,15 @@ func (m StringsModel) Update(msg tea.Msg) (StringsModel, tea.Cmd) {
 }
 
 func (m StringsModel) View() string {
-
+	bodyContent := lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		m.viewport.View(),
+		m.scrollbarView(),
+	)
 	body := lipgloss.NewStyle().
 		Width(m.width).
-		Padding(0, 1).
-		Render(m.viewport.View())
+		Padding(0, 0, 0, 1).
+		Render(bodyContent)
 	return lipgloss.JoinVertical(lipgloss.Left, m.titleView(), body, m.footerView())
 }
 
@@ -113,7 +117,7 @@ func (m StringsModel) titleView() string {
 }
 
 func (m StringsModel) footerView() string {
-	info := m.styles.footerInfo.Render(fmt.Sprintf("%d shown | %3.0f%%", m.shownCount, m.viewport.ScrollPercent()*100))
+	info := m.styles.footerInfo.Render(fmt.Sprintf("%d shown", m.shownCount))
 	line := m.styles.border.Render(strings.Repeat("─", max(0, m.width-lipgloss.Width(info)-3)))
 	return lipgloss.JoinHorizontal(lipgloss.Center, line, m.styles.border.Render("┤"), info, m.styles.border.Render("├┘"))
 }
@@ -128,7 +132,7 @@ func (m *StringsModel) setDimensions(width, height int) {
 
 func (m StringsModel) viewportHeight(totalHeight int) int {
 	titleHeight := lipgloss.Height(m.styles.title.Render("┌|Strings|"))
-	footerHeight := lipgloss.Height(m.styles.footerInfo.Render("99999 shown | 100%"))
+	footerHeight := lipgloss.Height(m.styles.footerInfo.Render("99999 shown"))
 	return max(1, totalHeight-titleHeight-footerHeight)
 }
 
@@ -176,6 +180,22 @@ func (m *StringsModel) refreshContent() {
 
 	m.content = b.String()
 	m.viewport.SetContent(m.content)
+}
+
+func (m StringsModel) scrollbarView() string {
+	visibleLines := m.viewportHeight(m.height)
+	totalLines := max(visibleLines, lipgloss.Height(m.content))
+	maxOffset := max(0, totalLines-visibleLines)
+	offset := int(m.viewport.ScrollPercent() * float64(maxOffset))
+
+	return renderVerticalScrollbar(
+		visibleLines,
+		totalLines,
+		visibleLines,
+		offset,
+		m.styles.border,
+		m.styles.border.Bold(true),
+	)
 }
 
 func renderWrappedStringEntry(prefix, value string, width int, prefixStyle, valueStyle lipgloss.Style) string {

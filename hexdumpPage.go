@@ -161,6 +161,8 @@ type HexdumpModel struct {
 		hex             lipgloss.Style
 		ascii           lipgloss.Style
 		converter       lipgloss.Style
+		scrollTrack     lipgloss.Style
+		scrollThumb     lipgloss.Style
 		selectedAddress lipgloss.Style
 	}
 	palette       hexdumpPalette
@@ -252,6 +254,8 @@ func initializeHexdumpModel(width, height int, binaryPath string, fileBytes []by
 	m.styles.address = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(theme.Border).BorderTop(false)
 	m.styles.hex = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(theme.Border).BorderTop(false)
 	m.styles.ascii = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(theme.Border).BorderTop(false)
+	m.styles.scrollTrack = lipgloss.NewStyle().Foreground(theme.Subtle)
+	m.styles.scrollThumb = lipgloss.NewStyle().Foreground(theme.PanelTitle)
 	m.styles.selectedAddress = lipgloss.NewStyle().Background(theme.Hexdump.SelectedBG).Foreground(theme.Hexdump.SelectedFG).Bold(true)
 	m.setDimensions(width, height)
 	return m
@@ -334,7 +338,7 @@ func (m *HexdumpModel) setDimensions(width, height int) {
 	m.width = width
 	m.height = height
 	m.layout.addressWidth = 8
-	m.view.bytesPerRow = max(1, (width-13)/4)
+	m.view.bytesPerRow = max(1, (width-14)/4)
 	m.layout.hexWidth = max(2, m.view.bytesPerRow*3-1)
 	m.layout.asciiWidth = max(1, m.view.bytesPerRow)
 
@@ -584,14 +588,30 @@ func padLine(value string, width int) string {
 
 func (m HexdumpModel) View() string {
 	addressText, hexText, asciiText := m.renderVisibleRows()
+	asciiBody := lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		asciiText,
+		m.scrollbarView(),
+	)
 	upperView := lipgloss.JoinHorizontal(
 		lipgloss.Left,
 		m.renderPanel("Address", m.styles.address.Height(m.view.visibleRows).Render(addressText)),
 		m.renderPanel("Hex", m.styles.hex.Height(m.view.visibleRows).Render(hexText)),
-		m.renderPanel("ASCII", m.styles.ascii.Height(m.view.visibleRows).Render(asciiText)),
+		m.renderPanel("ASCII", m.styles.ascii.Height(m.view.visibleRows).Render(asciiBody)),
 	)
 	lowerView := m.lowerConverterView()
 	return lipgloss.JoinVertical(lipgloss.Left, upperView, lowerView)
+}
+
+func (m HexdumpModel) scrollbarView() string {
+	return renderVerticalScrollbar(
+		m.view.visibleRows,
+		m.totalRows(),
+		m.view.visibleRows,
+		m.view.topRow,
+		m.styles.scrollTrack,
+		m.styles.scrollThumb,
+	)
 }
 
 func (m HexdumpModel) renderPanel(titleText string, body string) string {
