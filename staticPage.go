@@ -15,59 +15,57 @@ import (
 )
 
 type StaticModel struct {
-	width int
+	width  int
 	height int
-	theme Theme
-	styles struct{
-		title lipgloss.Style
-		header lipgloss.Style
-		fileSegment lipgloss.Style
+	theme  Theme
+	styles struct {
+		title            lipgloss.Style
+		header           lipgloss.Style
+		fileSegment      lipgloss.Style
 		fileSegmentTable table.Styles
 	}
-	header string
-	fileSegments []string
-	content string
-	currentSegment int
-	elfFile         *elf.File
-	elfHeader       ELFStaticHeader
-	elfNotes        []ELFNoteSection
-	segmentTables   []ELFStaticTable
+	header           string
+	fileSegments     []string
+	content          string
+	currentSegment   int
+	elfFile          *elf.File
+	elfHeader        ELFStaticHeader
+	elfNotes         []ELFNoteSection
+	segmentTables    []ELFStaticTable
 	fileSegmentTable table.Model
 	detailOpen       bool
 	detailContent    string
 }
 
 type KeyMap struct {
-    Left key.Binding
-    Right key.Binding
+	Left  key.Binding
+	Right key.Binding
 }
 
 var DefaultKeyMap = KeyMap{
-    Left: key.NewBinding(
-        key.WithKeys("h", "left"),        // actual keybindings
-        key.WithHelp("←/h", "move left"), // corresponding help text
-    ),
-    Right: key.NewBinding(
-        key.WithKeys("l", "right"),
-        key.WithHelp("→/l", "move right"),
-    ),
+	Left: key.NewBinding(
+		key.WithKeys("h", "left"),        // actual keybindings
+		key.WithHelp("←/h", "move left"), // corresponding help text
+	),
+	Right: key.NewBinding(
+		key.WithKeys("l", "right"),
+		key.WithHelp("→/l", "move right"),
+	),
 }
-
-
 
 func initializeStaticModel(width, height int, elfFile *elf.File, header ELFStaticHeader, notes []ELFNoteSection, segmentTables []ELFStaticTable, theme Theme) StaticModel {
 	if segmentTables == nil {
 		segmentTables = ParseELFSegmentTables(elfFile)
 	}
 	m := StaticModel{
-		width: width,
-		height: height,
-		theme: theme,
-		fileSegments: []string{"Program Header", "Section Header", "Symbols", "Dynamic Symbol", "Dynamic", "Relocations"},
-		content: "Static",
-		elfFile: elfFile,
-		elfHeader: header,
-		elfNotes: notes,
+		width:         width,
+		height:        height,
+		theme:         theme,
+		fileSegments:  []string{"Program Header", "Section Header", "Symbols", "Dynamic Symbol", "Dynamic", "Relocations"},
+		content:       "Static",
+		elfFile:       elfFile,
+		elfHeader:     header,
+		elfNotes:      notes,
 		segmentTables: segmentTables,
 		fileSegmentTable: table.New(
 			table.WithColumns([]table.Column{{Title: " ", Width: max(6, width-4)}}),
@@ -82,7 +80,7 @@ func initializeStaticModel(width, height int, elfFile *elf.File, header ELFStati
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(theme.Border).
 		BorderTop(false).
-		Width(m.width/2).
+		Width(m.width / 2).
 		Height(max(1, m.topPanelHeight()-1)).
 		Margin(0)
 	m.styles.fileSegment = lipgloss.NewStyle().
@@ -92,21 +90,21 @@ func initializeStaticModel(width, height int, elfFile *elf.File, header ELFStati
 		Width(m.width).
 		Height(max(1, m.bottomPanelHeight()-1)).
 		Margin(0)
-	m.styles.fileSegmentTable = themedStaticTableStyles(theme)
+	m.styles.fileSegmentTable = themedStaticTableStyles(theme, 1)
 	m.fileSegmentTable.SetStyles(m.styles.fileSegmentTable)
 	(&m).refreshFileSegmentTable()
 	return m
 }
 
-func themedStaticTableStyles(theme Theme) table.Styles {
+func themedStaticTableStyles(theme Theme, cellPadding int) table.Styles {
 	return table.Styles{
 		Header: lipgloss.NewStyle().
 			Bold(true).
 			Foreground(theme.Label).
-			Padding(0, 1),
+			Padding(0, cellPadding),
 		Cell: lipgloss.NewStyle().
 			Foreground(theme.Body).
-			Padding(0, 1),
+			Padding(0, cellPadding),
 		Selected: lipgloss.NewStyle().
 			Bold(true).
 			Foreground(theme.SelectionFG).
@@ -114,8 +112,7 @@ func themedStaticTableStyles(theme Theme) table.Styles {
 	}
 }
 
-
-func (m StaticModel) Init() tea.Cmd{
+func (m StaticModel) Init() tea.Cmd {
 	return nil
 }
 
@@ -172,7 +169,6 @@ func (m StaticModel) Update(msg tea.Msg) (StaticModel, tea.Cmd) {
 	return m, tcmd
 }
 
-
 func (m StaticModel) View() string {
 	base := lipgloss.JoinVertical(lipgloss.Left,
 		lipgloss.JoinHorizontal(lipgloss.Center, m.headerView(), m.notesView()),
@@ -222,9 +218,9 @@ func (m StaticModel) bottomPanelHeight() int {
 	return max(1, m.height-m.topPanelHeight())
 }
 
-func (m StaticModel) headerView() string{
+func (m StaticModel) headerView() string {
 	title := m.styles.title.Render("┌|Headers|")
-	line := strings.Repeat("─", max(0, (m.width/2)-lipgloss.Width(title) - 1))
+	line := strings.Repeat("─", max(0, (m.width/2)-lipgloss.Width(title)-1))
 	line = lipgloss.JoinHorizontal(lipgloss.Center, title, line, "┐")
 	labelStyle := lipgloss.NewStyle().Foreground(m.theme.Label)
 	panelContentH := max(1, m.topPanelHeight()-lipgloss.Height(line))
@@ -390,8 +386,7 @@ func (m StaticModel) fileSegmentsView() string {
 	return lipgloss.JoinVertical(lipgloss.Left, line, contents)
 }
 
-
-func (m *StaticModel) setDimensions(width, height int){
+func (m *StaticModel) setDimensions(width, height int) {
 	m.width = width
 	m.height = height
 	m.styles.title = lipgloss.NewStyle().Bold(true).Foreground(m.theme.PanelTitle)
@@ -399,7 +394,7 @@ func (m *StaticModel) setDimensions(width, height int){
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(m.theme.Border).
 		BorderTop(false).
-		Width(m.width/2).
+		Width(m.width / 2).
 		Height(max(1, m.topPanelHeight()-1))
 	m.styles.fileSegment = lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
@@ -408,7 +403,7 @@ func (m *StaticModel) setDimensions(width, height int){
 		Width(m.width).
 		Height(max(1, m.bottomPanelHeight()-1)).
 		Margin(0)
-	m.styles.fileSegmentTable = themedStaticTableStyles(m.theme)
+	m.styles.fileSegmentTable = themedStaticTableStyles(m.theme, 1)
 	m.fileSegmentTable.SetStyles(m.styles.fileSegmentTable)
 	m.refreshFileSegmentTable()
 }
@@ -438,8 +433,11 @@ func (m *StaticModel) refreshFileSegmentTable() {
 	avail := max(1, innerH-segTitleH)
 	tableOuter := max(3, avail)
 	tableWidth := m.fileSegmentPanelInnerWidth()
+	tablePadding := staticTableCellPadding(tableWidth, 1)
 
 	setFallback := func(msg string) {
+		m.styles.fileSegmentTable = themedStaticTableStyles(m.theme, tablePadding)
+		m.fileSegmentTable.SetStyles(m.styles.fileSegmentTable)
 		m.fileSegmentTable.SetWidth(tableWidth)
 		// Reconfigure safely: columns updates render previous rows immediately.
 		// Put a zero-cell row first so render cannot index past columns.
@@ -461,7 +459,10 @@ func (m *StaticModel) refreshFileSegmentTable() {
 	}
 
 	rows := tableRowsNormalized(seg.Rows, len(seg.Headers))
-	cols := tableColumnsFromHeaders(seg.Headers, rows, tableWidth, m.currentSegment)
+	tablePadding = staticTableCellPadding(tableWidth, len(seg.Headers))
+	m.styles.fileSegmentTable = themedStaticTableStyles(m.theme, tablePadding)
+	m.fileSegmentTable.SetStyles(m.styles.fileSegmentTable)
+	cols := tableColumnsFromHeaders(seg.Headers, rows, tableWidth, m.currentSegment, tablePadding)
 	if len(rows) == 0 {
 		// Empty body: bubbles leaves cursor at -1 for 0 rows; SetCursor(0) does not fix it.
 		placeholder := make(table.Row, len(seg.Headers))
@@ -497,33 +498,42 @@ func shortStaticTableHeader(h string) string {
 	}
 }
 
-func tableColumnsFromHeaders(headers []string, rows []table.Row, totalWidth int, segmentIdx int) []table.Column {
-	tw := totalWidth - 2
-	if tw < 8 {
-		tw = 8
-	}
+func tableColumnsFromHeaders(headers []string, rows []table.Row, totalWidth int, segmentIdx int, cellPadding int) []table.Column {
 	n := len(headers)
 	if n == 0 {
 		return nil
 	}
 
-	// Use actual content widths — no proportional inflation.
+	tw := totalWidth - (n * cellPadding * 2)
+	if tw < n {
+		tw = n
+	}
+
+	minColWidth := 3
+	if tw < n*minColWidth {
+		minColWidth = max(1, tw/n)
+	}
+
+	// Keep both the natural width (true content size) and a softer preferred
+	// width that keeps dense tables compact until there is room to breathe.
 	widths := make([]int, n)
+	naturalWidths := make([]int, n)
 	for j, h := range headers {
 		title := shortStaticTableHeader(h)
-		w := max(runewidth.StringWidth(title), 3)
+		natural := max(runewidth.StringWidth(title), minColWidth)
 		for _, r := range rows {
 			if j < len(r) {
 				cw := runewidth.StringWidth(r[j])
-				if cw > w {
-					w = cw
+				if cw > natural {
+					natural = cw
 				}
 			}
 		}
-		if cap := staticColumnMaxWidth(segmentIdx, h); cap > 0 && w > cap {
-			w = cap
+		naturalWidths[j] = natural
+		widths[j] = natural
+		if cap := staticColumnMaxWidth(segmentIdx, h); cap > 0 && widths[j] > cap {
+			widths[j] = cap
 		}
-		widths[j] = w
 	}
 
 	// If total natural width exceeds tw, trim the widest columns first.
@@ -541,19 +551,43 @@ func tableColumnsFromHeaders(headers []string, rows []table.Row, totalWidth int,
 				best = k
 			}
 		}
-		if widths[best] <= 3 {
+		if widths[best] <= minColWidth {
 			break
 		}
 		widths[best]--
 	}
 
-	// Give any leftover space only to the last column so no gaps appear mid-table.
+	// First, expand capped columns back toward their natural size when space
+	// allows, so wide layouts don't leave most of the table cramped.
 	total := 0
 	for _, w := range widths {
 		total += w
 	}
 	if total < tw && n > 0 {
-		widths[n-1] += tw - total
+		extra := tw - total
+		for extra > 0 {
+			progressed := false
+			for j := range widths {
+				if widths[j] >= naturalWidths[j] {
+					continue
+				}
+				widths[j]++
+				extra--
+				progressed = true
+				if extra == 0 {
+					break
+				}
+			}
+			if !progressed {
+				break
+			}
+		}
+		if extra > 0 {
+			for j := 0; extra > 0; j = (j + 1) % n {
+				widths[j]++
+				extra--
+			}
+		}
 	}
 
 	cols := make([]table.Column, n)
@@ -565,6 +599,19 @@ func tableColumnsFromHeaders(headers []string, rows []table.Row, totalWidth int,
 		cols[j] = table.Column{Title: title, Width: widths[j]}
 	}
 	return cols
+}
+
+func staticTableCellPadding(totalWidth, columnCount int) int {
+	if columnCount <= 0 {
+		return 1
+	}
+
+	// Prefer some spacing, but switch to a compact layout before padding causes
+	// dense tables to overflow narrow terminals.
+	if totalWidth-(columnCount*2) < columnCount*3 {
+		return 0
+	}
+	return 1
 }
 
 func staticColumnMaxWidth(segmentIdx int, header string) int {
