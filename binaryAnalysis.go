@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"debug/elf"
 
@@ -71,6 +72,7 @@ type ELFAnalysis struct {
 }
 
 type ELFStats struct {
+	Filename             string
 	FileSize             int64
 	Blocks               int64
 	BlockSize            int64
@@ -84,6 +86,10 @@ type ELFStats struct {
 	HasLinks             bool
 	HasUID               bool
 	HasGID               bool
+	UIDName              string // from user.LookupId when available
+	GIDName              string // from user.LookupGroupId when available
+	LastAccessAt         time.Time
+	LastModAt            time.Time
 	HasLastAccessTime    bool
 	HasLastModTime       bool
 }
@@ -378,10 +384,11 @@ func ParseElfStats(_ *elf.File, binaryPath string) ELFStats {
 	if err != nil {
 		return out
 	}
+	out.Filename = filepath.Base(binaryPath)
 	out.FileSize = fileInfo.Size()
-	out.LastModificationTime = fileInfo.ModTime().Unix()
+	out.LastModAt = fileInfo.ModTime()
 	out.HasLastModTime = true
-	populateELFStats(&out, fileInfo)
+	populateELFStats(&out, binaryPath, fileInfo)
 	return out
 }
 

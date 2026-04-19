@@ -6,11 +6,11 @@ import (
 
 	"debug/elf"
 
-	goansi "github.com/charmbracelet/x/ansi"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	goansi "github.com/charmbracelet/x/ansi"
 	"github.com/mattn/go-runewidth"
 )
 
@@ -223,7 +223,7 @@ func (m StaticModel) bottomPanelHeight() int {
 }
 
 func (m StaticModel) headerView() string{
-	title := m.styles.title.Render("┌┤Headers├")
+	title := m.styles.title.Render("┌|Headers|")
 	line := strings.Repeat("─", max(0, (m.width/2)-lipgloss.Width(title) - 1))
 	line = lipgloss.JoinHorizontal(lipgloss.Center, title, line, "┐")
 	labelStyle := lipgloss.NewStyle().Foreground(m.theme.Label)
@@ -261,7 +261,7 @@ func (m StaticModel) headerView() string{
 }
 
 func (m StaticModel) notesView() string {
-	title := m.styles.title.Render("┌┤Notes├")
+	title := m.styles.title.Render("┌|Notes|")
 	line := strings.Repeat("─", max(0, (m.width/2)-lipgloss.Width(title)-1))
 	line = lipgloss.JoinHorizontal(lipgloss.Center, title, line, "┐")
 	innerH := max(1, m.topPanelHeight()-lipgloss.Height(line))
@@ -394,6 +394,7 @@ func (m StaticModel) fileSegmentsView() string {
 func (m *StaticModel) setDimensions(width, height int){
 	m.width = width
 	m.height = height
+	m.styles.title = lipgloss.NewStyle().Bold(true).Foreground(m.theme.PanelTitle)
 	m.styles.header = lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(m.theme.Border).

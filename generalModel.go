@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -17,7 +18,6 @@ type GeneralModel struct {
 	description          string
 	repository           string
 	creator              string
-	filename             string
 	fileStats            ELFStats
 	dependencies         []ELFDependency
 	dependenciesSelected int
@@ -47,7 +47,6 @@ func initializeGeneralModel(width, height int, fileStats ELFStats, dependencies 
 		description:     "The greatest static binary analysis too of all time",
 		repository:      "https://github.com/baziele/binops",
 		creator:         "@baziele",
-		filename:        "maliciousFile.exe",
 		fileStats:       fileStats,
 		dependencies:    dependencies,
 		// propertiesViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(15)),
@@ -172,11 +171,10 @@ func (m GeneralModel) View() string {
 	description := m.styles.description.Render(m.description)
 	repository := lipgloss.NewStyle().Hyperlink(m.repository).Render(m.repository)
 	creator := m.styles.creator.Render(m.creator)
-	filename := lipgloss.NewStyle().Foreground(m.theme.BodyAlt).Render(m.filename)
 	properties := m.statsView()
 	dependencies := m.dependenciesView()
 
-	v := lipgloss.JoinVertical(lipgloss.Center, applicationName, description, repository, creator, filename, properties, dependencies)
+	v := lipgloss.JoinVertical(lipgloss.Center, applicationName, description, repository, creator, properties, dependencies)
 	v = lipgloss.PlaceHorizontal(m.width, lipgloss.Center, v)
 	return v
 }
@@ -190,8 +188,9 @@ func (m *GeneralModel) setDimensions(width, height int) {
 
 func (m GeneralModel) statsView() string {
 	var contents strings.Builder
+	valStyle := lipgloss.NewStyle().Foreground(m.theme.Body)
 	write := func(label, value string) {
-		contents.WriteString(m.styles.label.Render(label) + value)
+		contents.WriteString(m.styles.label.Render(label) + valStyle.Render(value))
 		contents.WriteByte('\n')
 	}
 	optionalInt64 := func(value int64, ok bool, format string) string {
@@ -206,29 +205,33 @@ func (m GeneralModel) statsView() string {
 		}
 		return lipgloss.Sprintf(format, value)
 	}
-	optionalUint32 := func(value uint32, ok bool, format string) string {
+	idWithName := func(value uint32, ok bool, name string) string {
 		if !ok {
 			return "N/A"
 		}
-		return lipgloss.Sprintf(format, value)
+		if name != "" {
+			return lipgloss.Sprintf("%d/%s", value, name)
+		}
+		return lipgloss.Sprintf("%d", value)
 	}
-	optionalTime := func(value int64, ok bool) string {
+	optionalTime := func(t time.Time, ok bool) string {
 		if !ok {
 			return "N/A"
 		}
-		return time.Unix(value, 0).Format(time.RFC3339)
+		// Match common stat-style layout: date, time with nanoseconds, numeric zone (e.g. +0000).
+		return t.Format("2006-01-02 15:04:05.000000000 -0700")
 	}
-	write("File Size: ", lipgloss.Sprintf("%d bytes", m.fileStats.FileSize))
+	write("File Size: ", humanFileSize(m.fileStats.FileSize))
 	write("Blocks: ", optionalInt64(m.fileStats.Blocks, m.fileStats.HasBlocks, "%d"))
 	write("Block Size: ", optionalInt64(m.fileStats.BlockSize, m.fileStats.HasBlockSize, "%d bytes"))
 	write("Links: ", optionalUint64(m.fileStats.Links, m.fileStats.HasLinks, "%d"))
-	write("UID: ", optionalUint32(m.fileStats.UID, m.fileStats.HasUID, "%d"))
-	write("GID: ", optionalUint32(m.fileStats.GID, m.fileStats.HasGID, "%d"))
-	write("Access: ", optionalTime(m.fileStats.LastAccessTime, m.fileStats.HasLastAccessTime))
-	write("Modified: ", optionalTime(m.fileStats.LastModificationTime, m.fileStats.HasLastModTime))
+	write("UID: ", idWithName(m.fileStats.UID, m.fileStats.HasUID, m.fileStats.UIDName))
+	write("GID: ", idWithName(m.fileStats.GID, m.fileStats.HasGID, m.fileStats.GIDName))
+	write("Access: ", optionalTime(m.fileStats.LastAccessAt, m.fileStats.HasLastAccessTime))
+	write("Modify: ", optionalTime(m.fileStats.LastModAt, m.fileStats.HasLastModTime))
 
 	fullContent := m.styles.stats.Render(contents.String())
-	title := m.styles.title.Render("┌|Stats|")
+	title := m.styles.title.Render("┌|" + m.fileStats.Filename + "|")
 	line := strings.Repeat("─", max(0, lipgloss.Width(fullContent)-lipgloss.Width(title)-1))
 	line = lipgloss.JoinHorizontal(lipgloss.Center, title, line, "┐")
 	return lipgloss.JoinVertical(lipgloss.Left, line, fullContent)
@@ -275,6 +278,31 @@ func (m GeneralModel) dependenciesView() string {
 	line := strings.Repeat("─", max(0, lipgloss.Width(fullContent)-lipgloss.Width(title)-1))
 	line = lipgloss.JoinHorizontal(lipgloss.Center, title, line, "┐")
 	return lipgloss.JoinVertical(lipgloss.Left, line, fullContent)
+}
+
+func humanFileSize(bytes int64) string {
+	if bytes < 0 {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	const (
+		KiB = 1024
+		MiB = KiB * 1024
+		GiB = MiB * 1024
+		TiB = GiB * 1024
+	)
+	b := float64(bytes)
+	switch {
+	case bytes < KiB:
+		return fmt.Sprintf("%d B", bytes)
+	case bytes < MiB:
+		return fmt.Sprintf("%.1f KB", b/KiB)
+	case bytes < GiB:
+		return fmt.Sprintf("%.1f MB", b/MiB)
+	case bytes < TiB:
+		return fmt.Sprintf("%.2f GB", b/GiB)
+	default:
+		return fmt.Sprintf("%.2f TB", b/TiB)
+	}
 }
 
 func (m GeneralModel) dependenciesVisibleRows() int {

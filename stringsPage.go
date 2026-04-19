@@ -35,9 +35,7 @@ func initializeStringsModel(width, height int, entries []ELFStringEntry, theme T
 	}
 	m.styles.title = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(theme.StringsTitleFG).
-		Background(theme.StringsTitleBG).
-		Padding(0, 1)
+		Foreground(theme.StringsTitleFG)
 	m.styles.border = lipgloss.NewStyle().Foreground(theme.StringsTitleBG)
 	m.styles.footerInfo = lipgloss.NewStyle().
 		Bold(true).
@@ -68,11 +66,11 @@ func (m StringsModel) Update(msg tea.Msg) (StringsModel, tea.Cmd) {
 func (m StringsModel) View() string {
 
 	// m.viewport.sethe
-	return lipgloss.JoinVertical(lipgloss.Left, m.titleView(), m.viewport.View(), m.footerView())
+	return lipgloss.JoinVertical(lipgloss.Left, m.titleView(), lipgloss.NewStyle().Padding(0, 1).Render(m.viewport.View()), m.footerView())
 }
 
 func (m StringsModel) titleView() string {
-	title := m.styles.title.Render("┌┤Strings├")
+	title := m.styles.border.Render("┌|") + m.styles.title.Render("Strings") + m.styles.border.Render("|")
 	line := m.styles.border.Render(strings.Repeat("─", max(0, m.width-lipgloss.Width(title)-1)))
 	return lipgloss.JoinHorizontal(lipgloss.Center, title, line, m.styles.border.Render("┐"))
 }
@@ -91,7 +89,7 @@ func (m *StringsModel) setDimensions(width, height int) {
 }
 
 func (m StringsModel) viewportHeight(totalHeight int) int {
-	titleHeight := lipgloss.Height(m.styles.title.Render("┌┤Strings├"))
+	titleHeight := lipgloss.Height(m.styles.title.Render("┌|Strings|"))
 	footerHeight := lipgloss.Height(m.styles.footerInfo.Render("100%:100%"))
 	return max(1, totalHeight-titleHeight-footerHeight)
 }
