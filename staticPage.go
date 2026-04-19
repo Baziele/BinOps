@@ -17,10 +17,12 @@ import (
 type StaticModel struct {
 	width int
 	height int
+	theme Theme
 	styles struct{
 		title lipgloss.Style
 		header lipgloss.Style
 		fileSegment lipgloss.Style
+		fileSegmentTable table.Styles
 	}
 	header string
 	fileSegments []string
@@ -53,13 +55,14 @@ var DefaultKeyMap = KeyMap{
 
 
 
-func initializeStaticModel(width, height int, elfFile *elf.File, header ELFStaticHeader, notes []ELFNoteSection, segmentTables []ELFStaticTable) StaticModel {
+func initializeStaticModel(width, height int, elfFile *elf.File, header ELFStaticHeader, notes []ELFNoteSection, segmentTables []ELFStaticTable, theme Theme) StaticModel {
 	if segmentTables == nil {
 		segmentTables = ParseELFSegmentTables(elfFile)
 	}
 	m := StaticModel{
 		width: width,
 		height: height,
+		theme: theme,
 		fileSegments: []string{"Program Header", "Section Header", "Symbols", "Dynamic Symbol", "Dynamic", "Relocations"},
 		content: "Static",
 		elfFile: elfFile,
@@ -74,16 +77,41 @@ func initializeStaticModel(width, height int, elfFile *elf.File, header ELFStati
 			table.WithHeight(max(8, height/2-lipgloss.Height(" ")-4)),
 		),
 	}
-	b := lipgloss.NormalBorder()
-	b.Right = "├"
-	b.Left = "┤"
-	b.Bottom = ""
-	b.Top = ""
-	m.styles.title = lipgloss.NewStyle().Bold(true) //.BorderStyle(b).Padding(0, 1).Margin(0) //.BorderBottom(false)
-	m.styles.header = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderTop(false).Width(m.width/2).Height(max(1, m.topPanelHeight()-1)).Margin(0)
-	m.styles.fileSegment = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderTop(false).Width(m.width).Height(max(1, m.bottomPanelHeight()-1)).Margin(0)
+	m.styles.title = lipgloss.NewStyle().Bold(true).Foreground(theme.PanelTitle)
+	m.styles.header = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(theme.Border).
+		BorderTop(false).
+		Width(m.width/2).
+		Height(max(1, m.topPanelHeight()-1)).
+		Margin(0)
+	m.styles.fileSegment = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(theme.Border).
+		BorderTop(false).
+		Width(m.width).
+		Height(max(1, m.bottomPanelHeight()-1)).
+		Margin(0)
+	m.styles.fileSegmentTable = themedStaticTableStyles(theme)
+	m.fileSegmentTable.SetStyles(m.styles.fileSegmentTable)
 	(&m).refreshFileSegmentTable()
 	return m
+}
+
+func themedStaticTableStyles(theme Theme) table.Styles {
+	return table.Styles{
+		Header: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(theme.Label).
+			Padding(0, 1),
+		Cell: lipgloss.NewStyle().
+			Foreground(theme.Body).
+			Padding(0, 1),
+		Selected: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(theme.SelectionFG).
+			Background(theme.SelectionBG),
+	}
 }
 
 
@@ -134,7 +162,7 @@ func (m StaticModel) Update(msg tea.Msg) (StaticModel, tea.Cmd) {
 			if cursor < 0 || cursor >= len(seg.Rows) {
 				break
 			}
-			m.detailContent = buildStaticRowDetail(seg, cursor, m.currentSegment)
+			m.detailContent = buildStaticRowDetail(seg, cursor, m.currentSegment, m.theme)
 			m.detailOpen = true
 			return m, nil
 		}
@@ -157,9 +185,9 @@ func (m StaticModel) View() string {
 }
 
 func (m StaticModel) renderDetailPanel() string {
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39"))
-	hintStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	sepStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("237"))
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(m.theme.PanelTitle)
+	hintStyle := lipgloss.NewStyle().Foreground(m.theme.Muted)
+	sepStyle := lipgloss.NewStyle().Foreground(m.theme.Subtle)
 
 	innerW := max(24, min(52, m.width-12))
 	sepLine := sepStyle.Render(strings.Repeat("─", innerW))
@@ -177,7 +205,7 @@ func (m StaticModel) renderDetailPanel() string {
 	inner := lipgloss.JoinVertical(lipgloss.Left, title, sepLine, body, sepLine, hint)
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("39")).
+		BorderForeground(m.theme.Border).
 		Padding(0, 1).
 		Width(innerW + 2).
 		Render(inner)
@@ -198,7 +226,7 @@ func (m StaticModel) headerView() string{
 	title := m.styles.title.Render("┌┤Headers├")
 	line := strings.Repeat("─", max(0, (m.width/2)-lipgloss.Width(title) - 1))
 	line = lipgloss.JoinHorizontal(lipgloss.Center, title, line, "┐")
-	labelStyle := lipgloss.NewStyle().Foreground(lipgloss.Cyan)
+	labelStyle := lipgloss.NewStyle().Foreground(m.theme.Label)
 	panelContentH := max(1, m.topPanelHeight()-lipgloss.Height(line))
 	if m.elfFile == nil {
 		return m.styles.header.Height(panelContentH).Render(lipgloss.JoinVertical(lipgloss.Left, line, "No ELF file loaded."))
@@ -238,14 +266,14 @@ func (m StaticModel) notesView() string {
 	line = lipgloss.JoinHorizontal(lipgloss.Center, title, line, "┐")
 	innerH := max(1, m.topPanelHeight()-lipgloss.Height(line))
 
-	displayStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
-	sectionStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#7D56F4")).Bold(true)
-	tableHeaderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	ownerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
-	sizeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
-	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
-	detailKeyStyle := lipgloss.NewStyle().Foreground(lipgloss.Cyan)
-	detailMutedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
+	displayStyle := lipgloss.NewStyle().Foreground(m.theme.PanelTitle)
+	sectionStyle := lipgloss.NewStyle().Foreground(m.theme.NavAccent).Bold(true)
+	tableHeaderStyle := lipgloss.NewStyle().Foreground(m.theme.Muted)
+	ownerStyle := lipgloss.NewStyle().Foreground(m.theme.Body)
+	sizeStyle := lipgloss.NewStyle().Foreground(m.theme.Warning)
+	descStyle := lipgloss.NewStyle().Foreground(m.theme.Body)
+	detailKeyStyle := lipgloss.NewStyle().Foreground(m.theme.Label)
+	detailMutedStyle := lipgloss.NewStyle().Foreground(m.theme.MutedStrong)
 
 	if m.elfFile == nil {
 		body := m.styles.header.Height(innerH).Render("No ELF file loaded.")
@@ -319,13 +347,13 @@ func (m StaticModel) fileSegmentTabLine() string {
 		if isCurrentPage {
 			style = style.Bold(true)
 		} else {
-			style = style.Foreground(lipgloss.Color("#7D56F4"))
+			style = style.Foreground(m.theme.NavAccent)
 		}
 		separator := ""
 		if !isFirst {
 			separator = " | "
 		}
-		str += style.Foreground(lipgloss.Color("#7D56F4")).Render(separator) + style.Render(page)
+		str += style.Foreground(m.theme.NavAccent).Render(separator) + style.Render(page)
 	}
 	line := strings.Repeat("─", max(0, m.width-lipgloss.Width(str)-1))
 	return lipgloss.JoinHorizontal(lipgloss.Center, str, line, "┐")
@@ -366,8 +394,21 @@ func (m StaticModel) fileSegmentsView() string {
 func (m *StaticModel) setDimensions(width, height int){
 	m.width = width
 	m.height = height
-	m.styles.header = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderTop(false).Width(m.width/2).Height(max(1, m.topPanelHeight()-1))
-	m.styles.fileSegment = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderTop(false).Width(m.width).Height(max(1, m.bottomPanelHeight()-1)).Margin(0)
+	m.styles.header = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(m.theme.Border).
+		BorderTop(false).
+		Width(m.width/2).
+		Height(max(1, m.topPanelHeight()-1))
+	m.styles.fileSegment = lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(m.theme.Border).
+		BorderTop(false).
+		Width(m.width).
+		Height(max(1, m.bottomPanelHeight()-1)).
+		Margin(0)
+	m.styles.fileSegmentTable = themedStaticTableStyles(m.theme)
+	m.fileSegmentTable.SetStyles(m.styles.fileSegmentTable)
 	m.refreshFileSegmentTable()
 }
 
@@ -628,7 +669,7 @@ func staticSegmentLongTitle(tab int) string {
 	return ""
 }
 
-func buildStaticRowDetail(seg ELFStaticTable, row, segmentTab int) string {
+func buildStaticRowDetail(seg ELFStaticTable, row, segmentTab int, theme Theme) string {
 	if row < 0 || row >= len(seg.Rows) {
 		return ""
 	}
@@ -639,9 +680,9 @@ func buildStaticRowDetail(seg ELFStaticTable, row, segmentTab int) string {
 		details = seg.CellDetails[row]
 	}
 
-	keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true)
-	metaStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("245"))
-	detailStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("243")).Italic(true)
+	keyStyle := lipgloss.NewStyle().Foreground(theme.Label).Bold(true)
+	metaStyle := lipgloss.NewStyle().Foreground(theme.MutedStrong)
+	detailStyle := lipgloss.NewStyle().Foreground(theme.Subtle).Italic(true)
 
 	maxKeyW := 0
 	for _, h := range headers {
