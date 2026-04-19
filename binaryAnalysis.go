@@ -435,7 +435,8 @@ func AnalyzeELF(binaryPath string) (*ELFAnalysis, error) {
 	tables := ParseELFSegmentTables(f)
 	stats := ParseElfStats(f, binaryPath)
 	dependencies := ParseElfDependencies(f, binaryPath)
-	extractedStrings, err := ExtractBinaryStrings(binaryPath, 15)
+	// Extract all printable runs once; the Strings page applies the interactive min-length filter.
+	extractedStrings, err := ExtractBinaryStrings(binaryPath, 1)
 	if err != nil {
 		f.Close()
 		return nil, err

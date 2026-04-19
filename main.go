@@ -14,6 +14,7 @@ import (
 )
 
 const BUILDERSIO_URL = "0.1.0"
+
 type model struct {
 	ready       bool
 	isFileReady bool
@@ -23,9 +24,9 @@ type model struct {
 	height      int
 	theme       Theme
 
-	styles      struct {
+	styles struct {
 		borderStyles lipgloss.Style
-		navStyles lipgloss.Style
+		navStyles    lipgloss.Style
 	}
 	generalPage GeneralModel
 	staticPage  StaticModel
@@ -39,9 +40,8 @@ type model struct {
 // contentSize returns the inner dimensions for page content (inside border, below nav).
 func (m model) contentSize() (w, h int) {
 	navHeight := lipgloss.Height(m.navView())
-	borderWidth := lipgloss.Width(m.styles.borderStyles.Render(""))
-	borderHeight := lipgloss.Height(m.styles.borderStyles.Render(""))
-	return m.width - borderWidth, m.height - navHeight - borderHeight
+	return m.width - m.styles.borderStyles.GetHorizontalFrameSize(),
+		m.height - navHeight - m.styles.borderStyles.GetVerticalFrameSize()
 }
 
 func initializeModel(binaryName string) model {
@@ -91,13 +91,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.WindowSizeMsg:
 		navHeight := lipgloss.Height(m.navView())
-		borderWidth := lipgloss.Width(m.styles.borderStyles.Render(""))
-		borderHeight := lipgloss.Height(m.styles.borderStyles.Render(""))
+		contentWidth := msg.Width - m.styles.borderStyles.GetHorizontalFrameSize()
+		contentHeight := msg.Height - navHeight - m.styles.borderStyles.GetVerticalFrameSize()
 		if !m.ready {
 			m.width = msg.Width
 			m.height = msg.Height
-			contentWidth := m.width - borderWidth
-			contentHeight := m.height - navHeight - borderHeight
 			m.generalPage = initializeGeneralModel(contentWidth, contentHeight, m.elfAnalysis.Stats, m.elfAnalysis.Dependencies, m.theme)
 			m.staticPage = initializeStaticModel(contentWidth, contentHeight, m.elfAnalysis.File, m.elfAnalysis.Header, m.elfAnalysis.NoteSections, m.elfAnalysis.SegmentTables, m.theme)
 			m.dynamicPage = initializeDynamicModel()
@@ -107,10 +105,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.width = msg.Width
 		m.height = msg.Height
-		m.generalPage.setDimensions(m.width-borderWidth, m.height-navHeight-borderHeight)
-		m.staticPage.setDimensions(m.width-borderWidth, m.height-navHeight-borderHeight)
-		m.stringsPage.setDimensions(m.width-borderWidth, m.height-navHeight-borderHeight)
-		m.hexdumpPage.setDimensions(m.width-borderWidth, m.height-navHeight-borderHeight)
+		m.generalPage.setDimensions(contentWidth, contentHeight)
+		m.staticPage.setDimensions(contentWidth, contentHeight)
+		m.stringsPage.setDimensions(contentWidth, contentHeight)
+		m.hexdumpPage.setDimensions(contentWidth, contentHeight)
 
 	case ELFAnalysis:
 		m.elfAnalysis = msg
@@ -177,7 +175,10 @@ func (m model) View() tea.View {
 		currentView = m.hexdumpPage.View()
 	}
 	body := lipgloss.JoinVertical(lipgloss.Top, currentView)
-	body = m.styles.borderStyles.Width(m.width-2).Height(m.height - lipgloss.Height(nav)).Render(body)
+	body = m.styles.borderStyles.
+		Width(m.width - m.styles.borderStyles.GetHorizontalMargins()).
+		Height(m.height - lipgloss.Height(nav) - m.styles.borderStyles.GetVerticalMargins()).
+		Render(body)
 	v.SetContent(lipgloss.JoinVertical(lipgloss.Top, nav, body))
 	return v
 }
@@ -198,9 +199,8 @@ func (m model) navView() string {
 		}
 		str += style.Foreground(m.theme.NavAccent).Render(separator) + style.Render(page)
 	}
-	
 
-	return m.styles.navStyles.Width(m.width-2).Render(str)
+	return m.styles.navStyles.Width(m.width - 2).Render(str)
 }
 
 func main() {

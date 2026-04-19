@@ -261,16 +261,16 @@ func (m StaticModel) notesView() string {
 	line := strings.Repeat("─", max(0, (m.width/2)-lipgloss.Width(title)-1))
 	line = lipgloss.JoinHorizontal(lipgloss.Center, title, line, "┐")
 	innerH := max(1, m.topPanelHeight()-lipgloss.Height(line))
+	innerW := max(16, m.styles.header.GetWidth()-m.styles.header.GetHorizontalFrameSize())
 
-	displayStyle := lipgloss.NewStyle().Foreground(m.theme.PanelTitle)
+	displayStyle := lipgloss.NewStyle().Foreground(m.theme.PanelTitle).Bold(true)
 	sectionStyle := lipgloss.NewStyle().Foreground(m.theme.NavAccent).Bold(true)
-	tableHeaderStyle := lipgloss.NewStyle().Foreground(m.theme.Muted)
+	labelStyle := lipgloss.NewStyle().Foreground(m.theme.Label)
 	ownerStyle := lipgloss.NewStyle().Foreground(m.theme.Body)
 	sizeStyle := lipgloss.NewStyle().Foreground(m.theme.Warning)
 	descStyle := lipgloss.NewStyle().Foreground(m.theme.Body)
 	detailKeyStyle := lipgloss.NewStyle().Foreground(m.theme.Label)
 	detailMutedStyle := lipgloss.NewStyle().Foreground(m.theme.MutedStrong)
-
 	if m.elfFile == nil {
 		body := m.styles.header.Height(innerH).Render("No ELF file loaded.")
 		return lipgloss.JoinVertical(lipgloss.Left, line, body)
@@ -281,33 +281,37 @@ func (m StaticModel) notesView() string {
 	}
 
 	var b strings.Builder
-	for _, sec := range m.elfNotes {
-		b.WriteString(displayStyle.Render("Displaying notes found in: "))
+	for secIdx, sec := range m.elfNotes {
+		if secIdx > 0 {
+			b.WriteByte('\n')
+			b.WriteByte('\n')
+		}
+		b.WriteString(displayStyle.Render("Section"))
+		b.WriteString(" ")
 		b.WriteString(sectionStyle.Render(sec.SectionName))
 		b.WriteByte('\n')
-		b.WriteString(tableHeaderStyle.Render("  Owner                Data size        Description"))
-		b.WriteByte('\n')
-		for _, e := range sec.Entries {
+		for entryIdx, e := range sec.Entries {
+			if entryIdx > 0 {
+				b.WriteByte('\n')
+			}
 			sizeStr := fmt.Sprintf("0x%08x", e.DataSize)
-			b.WriteString("  ")
-			b.WriteString(ownerStyle.Render(fmt.Sprintf("%-20s", e.Owner)))
-			b.WriteString(" ")
-			b.WriteString(sizeStyle.Render(fmt.Sprintf("%-16s", sizeStr)))
-			b.WriteString(" ")
-			b.WriteString(descStyle.Render(e.Description))
+			b.WriteString(renderWrappedNoteField("Owner", e.Owner, innerW, labelStyle, ownerStyle))
 			b.WriteByte('\n')
+			b.WriteString(renderWrappedNoteField("Size", sizeStr, innerW, labelStyle, sizeStyle))
+			b.WriteByte('\n')
+			b.WriteString(renderWrappedNoteField("Description", e.Description, innerW, labelStyle, descStyle))
 			for _, d := range e.Details {
-				writeNoteDetailLine(&b, d, detailKeyStyle, detailMutedStyle)
+				b.WriteByte('\n')
+				writeNoteDetailLine(&b, d, innerW, detailKeyStyle, detailMutedStyle, ownerStyle)
 			}
 		}
-		b.WriteByte('\n')
 	}
 	notes := m.styles.header.Height(innerH).Render(strings.TrimSuffix(b.String(), "\n"))
 	return lipgloss.JoinVertical(lipgloss.Left, line, notes)
 }
 
 // writeNoteDetailLine colors leading indentation and a "Key:" prefix like readelf output.
-func writeNoteDetailLine(b *strings.Builder, line string, keyStyle, mutedStyle lipgloss.Style) {
+func writeNoteDetailLine(b *strings.Builder, line string, width int, keyStyle, mutedStyle, bodyStyle lipgloss.Style) {
 	if line == "" {
 		return
 	}
@@ -315,24 +319,149 @@ func writeNoteDetailLine(b *strings.Builder, line string, keyStyle, mutedStyle l
 	for trimStart < len(line) && line[trimStart] == ' ' {
 		trimStart++
 	}
-	pad := line[:trimStart]
 	rest := line[trimStart:]
-	b.WriteString(pad)
+	indent := min(trimStart, max(0, width-6))
+	prefix := strings.Repeat(" ", indent)
 	if strings.HasPrefix(rest, "Properties:") {
-		b.WriteString(mutedStyle.Render(rest))
-		b.WriteByte('\n')
+		b.WriteString(renderWrappedStyledBlock(prefix, rest, width, mutedStyle))
 		return
 	}
 	if idx := strings.Index(rest, ": "); idx >= 0 {
 		key := rest[:idx+1]
 		val := rest[idx+2:]
-		b.WriteString(keyStyle.Render(key))
-		b.WriteString(val)
-		b.WriteByte('\n')
+		labelPrefix := prefix + key
+		b.WriteString(renderWrappedStyledValue(labelPrefix, val, width, keyStyle, bodyStyle))
 		return
 	}
-	b.WriteString(rest)
-	b.WriteByte('\n')
+	b.WriteString(renderWrappedStyledBlock(prefix, rest, width, bodyStyle))
+}
+
+func renderWrappedNoteField(label, value string, width int, labelStyle, valueStyle lipgloss.Style) string {
+	return renderWrappedStyledValue(label+": ", value, width, labelStyle, valueStyle)
+}
+
+func renderWrappedStyledValue(prefix, value string, width int, prefixStyle, valueStyle lipgloss.Style) string {
+	usableWidth := max(8, width)
+	prefixWidth := runewidth.StringWidth(prefix)
+	if prefixWidth >= usableWidth-2 {
+		prefixWidth = 0
+		prefix = ""
+	}
+	valueWidth := max(8, usableWidth-prefixWidth)
+	wrapped := wrapVisualText(strings.TrimSpace(value), valueWidth)
+	lines := strings.Split(wrapped, "\n")
+	if len(lines) == 0 {
+		lines = []string{""}
+	}
+
+	var out strings.Builder
+	continuationPrefix := strings.Repeat(" ", prefixWidth)
+	for i, line := range lines {
+		if i > 0 {
+			out.WriteByte('\n')
+		}
+		if i == 0 {
+			out.WriteString(prefixStyle.Render(prefix))
+		} else if prefixWidth > 0 {
+			out.WriteString(continuationPrefix)
+		}
+		out.WriteString(valueStyle.Render(line))
+	}
+	return out.String()
+}
+
+func renderWrappedStyledBlock(prefix, value string, width int, style lipgloss.Style) string {
+	usableWidth := max(8, width)
+	prefixWidth := runewidth.StringWidth(prefix)
+	textWidth := max(8, usableWidth-prefixWidth)
+	wrapped := wrapVisualText(strings.TrimSpace(value), textWidth)
+	lines := strings.Split(wrapped, "\n")
+
+	var out strings.Builder
+	for i, line := range lines {
+		if i > 0 {
+			out.WriteByte('\n')
+		}
+		out.WriteString(prefix)
+		out.WriteString(style.Render(line))
+	}
+	return out.String()
+}
+
+func wrapVisualText(s string, width int) string {
+	s = strings.TrimSpace(strings.ReplaceAll(s, "\t", " "))
+	if s == "" {
+		return ""
+	}
+	width = max(8, width)
+
+	words := strings.Fields(s)
+	if len(words) == 0 {
+		return ""
+	}
+
+	var lines []string
+	current := ""
+	for _, piece := range splitVisualWord(words[0], width) {
+		if current == "" {
+			current = piece
+			continue
+		}
+		lines = append(lines, current)
+		current = piece
+	}
+	for _, word := range words[1:] {
+		wordParts := splitVisualWord(word, width)
+		candidate := current + " " + wordParts[0]
+		if runewidth.StringWidth(candidate) <= width {
+			current = candidate
+		} else {
+			if current != "" {
+				lines = append(lines, current)
+			}
+			current = wordParts[0]
+		}
+		for _, part := range wordParts[1:] {
+			if current != "" {
+				lines = append(lines, current)
+			}
+			current = part
+		}
+	}
+	if current != "" {
+		lines = append(lines, current)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func splitVisualWord(word string, width int) []string {
+	if word == "" {
+		return []string{""}
+	}
+	if runewidth.StringWidth(word) <= width {
+		return []string{word}
+	}
+
+	var parts []string
+	var b strings.Builder
+	currentWidth := 0
+	for _, r := range word {
+		rw := runewidth.RuneWidth(r)
+		if rw <= 0 {
+			rw = 1
+		}
+		if currentWidth+rw > width && b.Len() > 0 {
+			parts = append(parts, b.String())
+			b.Reset()
+			currentWidth = 0
+		}
+		b.WriteRune(r)
+		currentWidth += rw
+	}
+	if b.Len() > 0 {
+		parts = append(parts, b.String())
+	}
+	return parts
 }
 
 func (m StaticModel) fileSegmentTabLine() string {

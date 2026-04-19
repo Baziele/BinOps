@@ -712,7 +712,13 @@ func (m HexdumpModel) convertBinary() string {
 }
 
 func (m HexdumpModel) convertOffset() string {
-	return m.renderConverter("Offset", strconv.FormatInt(int64(m.selectionStart()), 16))
+	offset := m.selectionStart()
+	width := 8
+	// Use wider hex padding when file length exceeds 32-bit offsets.
+	if m.document.Len() > 0xFFFFFFFF {
+		width = 16
+	}
+	return m.renderConverter("Offset", fmt.Sprintf("0x%0*X (%d)", width, offset, offset))
 }
 
 func (m HexdumpModel) convertUnsigned16Bit() string {
