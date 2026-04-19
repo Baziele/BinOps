@@ -37,12 +37,14 @@ type StaticModel struct {
 	detailContent    string
 }
 
-type KeyMap struct {
-	Left  key.Binding
-	Right key.Binding
+type StaticKeyMap struct {
+	Left        key.Binding
+	Right       key.Binding
+	OpenDetail  key.Binding
+	CloseDetail key.Binding
 }
 
-var DefaultKeyMap = KeyMap{
+var StaticDefaultKeyMap = StaticKeyMap{
 	Left: key.NewBinding(
 		key.WithKeys("h", "left"),        // actual keybindings
 		key.WithHelp("←/h", "move left"), // corresponding help text
@@ -51,6 +53,31 @@ var DefaultKeyMap = KeyMap{
 		key.WithKeys("l", "right"),
 		key.WithHelp("→/l", "move right"),
 	),
+	OpenDetail: key.NewBinding(
+		key.WithKeys("enter"),
+		key.WithHelp("enter", "open row")),
+	CloseDetail: key.NewBinding(
+		key.WithKeys("esc", "enter"),
+		key.WithHelp("esc", "close detail")),
+}
+
+func (km StaticKeyMap) ShortHelp() []key.Binding {
+	if km.CloseDetail.Enabled() {
+		return []key.Binding{shortHelpBinding("esc/enter", "close detail")}
+	}
+	var items []key.Binding
+	if km.Left.Enabled() || km.Right.Enabled() {
+		items = append(items, shortHelpBinding("h/l", "section"))
+	}
+	items = append(items, shortHelpBinding("j/k", "scroll"))
+	if km.OpenDetail.Enabled() {
+		items = append(items, shortHelpBinding("enter", "row"))
+	}
+	return items
+}
+
+func (km StaticKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{km.ShortHelp()}
 }
 
 func initializeStaticModel(width, height int, elfFile *elf.File, header ELFStaticHeader, notes []ELFNoteSection, segmentTables []ELFStaticTable, theme Theme) StaticModel {
@@ -103,7 +130,6 @@ func themedStaticTableStyles(theme Theme, cellPadding int) table.Styles {
 			Foreground(theme.Label).
 			Padding(0, cellPadding),
 		Cell: lipgloss.NewStyle().
-			Foreground(theme.Body).
 			Padding(0, cellPadding),
 		Selected: lipgloss.NewStyle().
 			Bold(true).
@@ -119,8 +145,8 @@ func (m StaticModel) Init() tea.Cmd {
 func (m StaticModel) Update(msg tea.Msg) (StaticModel, tea.Cmd) {
 	if m.detailOpen {
 		if kp, ok := msg.(tea.KeyPressMsg); ok {
-			switch kp.String() {
-			case "esc", "q", "enter":
+			switch {
+			case key.Matches(kp, StaticDefaultKeyMap.CloseDetail):
 				m.detailOpen = false
 				return m, nil
 			}
@@ -131,7 +157,7 @@ func (m StaticModel) Update(msg tea.Msg) (StaticModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch {
-		case key.Matches(msg, DefaultKeyMap.Left):
+		case key.Matches(msg, StaticDefaultKeyMap.Left):
 			if len(m.fileSegments) == 0 {
 				return m, nil
 			}
@@ -139,7 +165,7 @@ func (m StaticModel) Update(msg tea.Msg) (StaticModel, tea.Cmd) {
 			m.currentSegment = (m.currentSegment - 1 + n) % n
 			m.refreshFileSegmentTable()
 			return m, nil
-		case key.Matches(msg, DefaultKeyMap.Right):
+		case key.Matches(msg, StaticDefaultKeyMap.Right):
 			if len(m.fileSegments) == 0 {
 				return m, nil
 			}
@@ -147,7 +173,7 @@ func (m StaticModel) Update(msg tea.Msg) (StaticModel, tea.Cmd) {
 			m.currentSegment = (m.currentSegment + 1) % n
 			m.refreshFileSegmentTable()
 			return m, nil
-		case msg.String() == "enter":
+		case key.Matches(msg, StaticDefaultKeyMap.OpenDetail):
 			if len(m.segmentTables) == 0 || m.currentSegment < 0 || m.currentSegment >= len(m.segmentTables) {
 				break
 			}
@@ -174,10 +200,10 @@ func (m StaticModel) View() string {
 		lipgloss.JoinHorizontal(lipgloss.Center, m.headerView(), m.notesView()),
 		m.fileSegmentsView())
 	if !m.detailOpen {
-		return base
+		return lipgloss.JoinVertical(lipgloss.Left, base, m.helpView())
 	}
 	panel := m.renderDetailPanel()
-	return overlayCenter(base, panel, m.width, m.height)
+	return lipgloss.JoinVertical(lipgloss.Left, overlayCenter(base, panel, m.width, m.contentHeight()), m.helpView())
 }
 
 func (m StaticModel) renderDetailPanel() string {
@@ -208,14 +234,15 @@ func (m StaticModel) renderDetailPanel() string {
 }
 
 func (m StaticModel) topPanelHeight() int {
-	if m.height <= 1 {
+	contentHeight := m.contentHeight()
+	if contentHeight <= 1 {
 		return 1
 	}
-	return max(1, m.height/2)
+	return max(1, contentHeight/2)
 }
 
 func (m StaticModel) bottomPanelHeight() int {
-	return max(1, m.height-m.topPanelHeight())
+	return max(1, m.contentHeight()-m.topPanelHeight())
 }
 
 func (m StaticModel) headerView() string {
@@ -504,12 +531,15 @@ func (m StaticModel) fileSegmentsView() string {
 		segIdx = (m.currentSegment%len(m.fileSegments) + len(m.fileSegments)) % len(m.fileSegments)
 	}
 	segTitle := m.styles.title.Render(clipVisual(m.fileSegments[segIdx], max(8, innerW-2)))
+	tableView := lipgloss.NewStyle().
+		Foreground(m.theme.Body).
+		Render(m.fileSegmentTable.View())
 	tableBox := lipgloss.NewStyle().
 		Width(innerW).
 		MaxWidth(innerW).
 		Height(max(1, innerH-lipgloss.Height(segTitle))).
 		MaxHeight(max(1, innerH-lipgloss.Height(segTitle))).
-		Render(m.fileSegmentTable.View())
+		Render(tableView)
 	contents := m.styles.fileSegment.Height(panelContentH).Render(lipgloss.JoinVertical(lipgloss.Left, segTitle, tableBox))
 
 	return lipgloss.JoinVertical(lipgloss.Left, line, contents)
@@ -535,6 +565,23 @@ func (m *StaticModel) setDimensions(width, height int) {
 	m.styles.fileSegmentTable = themedStaticTableStyles(m.theme, 1)
 	m.fileSegmentTable.SetStyles(m.styles.fileSegmentTable)
 	m.refreshFileSegmentTable()
+}
+
+func (m StaticModel) helpKeyMap() StaticKeyMap {
+	km := StaticDefaultKeyMap
+	km.CloseDetail.SetEnabled(m.detailOpen)
+	km.Left.SetEnabled(!m.detailOpen && len(m.fileSegments) > 0)
+	km.Right.SetEnabled(!m.detailOpen && len(m.fileSegments) > 0)
+	km.OpenDetail.SetEnabled(!m.detailOpen)
+	return km
+}
+
+func (m StaticModel) helpView() string {
+	return renderHelpFooter(m.theme, m.width, m.helpKeyMap(), DefaultAppKeyMap)
+}
+
+func (m StaticModel) contentHeight() int {
+	return max(1, m.height-helpFooterHeight(m.theme, m.width, m.helpKeyMap(), DefaultAppKeyMap))
 }
 
 func (m *StaticModel) refreshFileSegmentTable() {

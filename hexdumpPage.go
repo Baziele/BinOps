@@ -180,6 +180,7 @@ type HexdumpKeyMap struct {
 	RowEnd       key.Binding
 	ToggleEndian key.Binding
 	ToggleEdit   key.Binding
+	CancelEdit   key.Binding
 	Save         key.Binding
 }
 
@@ -194,7 +195,25 @@ var HexdumpDefaultKeyMap = HexdumpKeyMap{
 	RowEnd:       key.NewBinding(key.WithKeys("end", "$"), key.WithHelp("end", "row end")),
 	ToggleEndian: key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "toggle endian")),
 	ToggleEdit:   key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "edit mode")),
+	CancelEdit:   key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel edit")),
 	Save:         key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "save")),
+}
+
+func (km HexdumpKeyMap) ShortHelp() []key.Binding {
+	items := []key.Binding{
+		shortHelpBinding("h/j/k/l", "scroll"),
+		shortHelpBinding("i", "edit"),
+		shortHelpBinding("n", "endian"),
+		shortHelpBinding("ctrl+s", "save"),
+	}
+	if km.CancelEdit.Enabled() {
+		items = append(items, shortHelpBinding("esc", "cancel"))
+	}
+	return items
+}
+
+func (km HexdumpKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{km.ShortHelp()}
 }
 
 const converterShortRead = "EOF"
@@ -317,7 +336,7 @@ func (m HexdumpModel) Update(msg tea.Msg) (HexdumpModel, tea.Cmd) {
 				m.invalidateAllRows()
 				return m, analyzeBinary(m.binaryPath)
 			}
-		case msg.String() == "esc":
+		case key.Matches(msg, HexdumpDefaultKeyMap.CancelEdit):
 			if m.view.editMode {
 				m.view.editMode = false
 				m.view.highNibble = true
@@ -352,7 +371,8 @@ func (m *HexdumpModel) setDimensions(width, height int) {
 		Height(2)
 
 	converterRowsHeight := lipgloss.Height(m.lowerConverterView())
-	m.view.visibleRows = max(1, height-converterRowsHeight-1)
+	helpHeight := helpFooterHeight(m.theme, m.width, m.helpKeyMap(), DefaultAppKeyMap)
+	m.view.visibleRows = max(1, height-converterRowsHeight-helpHeight-1)
 	m.ensureCursorInBounds()
 	m.ensureVisible()
 	m.invalidateAllRows()
@@ -600,7 +620,17 @@ func (m HexdumpModel) View() string {
 		m.renderPanel("ASCII", m.styles.ascii.Height(m.view.visibleRows).Render(asciiBody)),
 	)
 	lowerView := m.lowerConverterView()
-	return lipgloss.JoinVertical(lipgloss.Left, upperView, lowerView)
+	return lipgloss.JoinVertical(lipgloss.Left, upperView, lowerView, m.helpView())
+}
+
+func (m HexdumpModel) helpKeyMap() HexdumpKeyMap {
+	km := HexdumpDefaultKeyMap
+	km.CancelEdit.SetEnabled(m.view.editMode)
+	return km
+}
+
+func (m HexdumpModel) helpView() string {
+	return renderHelpFooter(m.theme, m.width, m.helpKeyMap(), DefaultAppKeyMap)
 }
 
 func (m HexdumpModel) scrollbarView() string {

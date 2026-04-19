@@ -5,10 +5,32 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
 )
+
+type GeneralKeyMap struct {
+	Up   key.Binding
+	Down key.Binding
+}
+
+var GeneralDefaultKeyMap = GeneralKeyMap{
+	Up:   key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
+	Down: key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
+}
+
+func (km GeneralKeyMap) ShortHelp() []key.Binding {
+	if !km.Up.Enabled() && !km.Down.Enabled() {
+		return nil
+	}
+	return []key.Binding{shortHelpBinding("j/k", "scroll")}
+}
+
+func (km GeneralKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{km.ShortHelp()}
+}
 
 type GeneralModel struct {
 	width                int
@@ -39,65 +61,65 @@ type GeneralModel struct {
 
 func initializeGeneralModel(width, height int, fileStats ELFStats, dependencies []ELFDependency, theme Theme) GeneralModel {
 	m := GeneralModel{
-		width:           width,
-		height:          height,
-		theme:           theme,
-		content:         "General",
+		width:   width,
+		height:  height,
+		theme:   theme,
+		content: "General",
 		// applicationName: "BinOps",
-		description:     "The greatest static binary analysis too of all time",
-		repository:      "https://github.com/baziele/binops",
-		creator:         "@baziele",
-		fileStats:       fileStats,
-		dependencies:    dependencies,
+		description:  "The greatest static binary analysis too of all time",
+		repository:   "https://github.com/baziele/binops",
+		creator:      "@baziele",
+		fileStats:    fileStats,
+		dependencies: dependencies,
 		// propertiesViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(15)),
 		// dependenciesViewport: viewport.New(viewport.WithWidth(60), viewport.WithHeight(7)),
 	}
 
-// 	m.applicationName = `
-// █████      ███                                       
-// ▒▒███      ▒▒▒                                        
-//  ▒███████  ████  ████████    ██████  ████████   █████ 
-//  ▒███▒▒███▒▒███ ▒▒███▒▒███  ███▒▒███▒▒███▒▒███ ███▒▒  
-//  ▒███ ▒███ ▒███  ▒███ ▒███ ▒███ ▒███ ▒███ ▒███▒▒█████ 
-//  ▒███ ▒███ ▒███  ▒███ ▒███ ▒███ ▒███ ▒███ ▒███ ▒▒▒▒███
-//  ████████  █████ ████ █████▒▒██████  ▒███████  ██████ 
-// ▒▒▒▒▒▒▒▒  ▒▒▒▒▒ ▒▒▒▒ ▒▒▒▒▒  ▒▒▒▒▒▒   ▒███▒▒▒  ▒▒▒▒▒▒  
-//                                      ▒███             
-//                                      █████            
-//                                     ▒▒▒▒▒             
-// 	`
+	// 	m.applicationName = `
+	// █████      ███
+	// ▒▒███      ▒▒▒
+	//  ▒███████  ████  ████████    ██████  ████████   █████
+	//  ▒███▒▒███▒▒███ ▒▒███▒▒███  ███▒▒███▒▒███▒▒███ ███▒▒
+	//  ▒███ ▒███ ▒███  ▒███ ▒███ ▒███ ▒███ ▒███ ▒███▒▒█████
+	//  ▒███ ▒███ ▒███  ▒███ ▒███ ▒███ ▒███ ▒███ ▒███ ▒▒▒▒███
+	//  ████████  █████ ████ █████▒▒██████  ▒███████  ██████
+	// ▒▒▒▒▒▒▒▒  ▒▒▒▒▒ ▒▒▒▒ ▒▒▒▒▒  ▒▒▒▒▒▒   ▒███▒▒▒  ▒▒▒▒▒▒
+	//                                      ▒███
+	//                                      █████
+	//                                     ▒▒▒▒▒
+	// 	`
 
-// 	 m.applicationName = `
-//  ███████████  █████ ██████   █████    ███████    ███████████   █████████ 
-// ░░███░░░░░███░░███ ░░██████ ░░███   ███░░░░░███ ░░███░░░░░███ ███░░░░░███
-//  ░███    ░███ ░███  ░███░███ ░███  ███     ░░███ ░███    ░███░███    ░░░ 
-//  ░██████████  ░███  ░███░░███░███ ░███      ░███ ░██████████ ░░█████████ 
-//  ░███░░░░░███ ░███  ░███ ░░██████ ░███      ░███ ░███░░░░░░   ░░░░░░░░███
-//  ░███    ░███ ░███  ░███  ░░█████ ░░███     ███  ░███         ███    ░███
-//  ███████████  █████ █████  ░░█████ ░░░███████░   █████       ░░█████████ 
-// ░░░░░░░░░░░  ░░░░░ ░░░░░    ░░░░░    ░░░░░░░    ░░░░░         ░░░░░░░░░  
-// 	`
-	
-// 	m.applicationName = `
-// ░▒▓███████▓▒░░▒▓█▓▒░▒▓███████▓▒░ ░▒▓██████▓▒░░▒▓███████▓▒░ ░▒▓███████▓▒░ 
-// ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░        
-// ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░        
-// ░▒▓███████▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓███████▓▒░ ░▒▓██████▓▒░  
-// ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░             ░▒▓█▓▒░ 
-// ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░             ░▒▓█▓▒░ 
-// ░▒▓███████▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░░▒▓██████▓▒░░▒▓█▓▒░      ░▒▓███████▓▒░  
+	// 	 m.applicationName = `
+	//  ███████████  █████ ██████   █████    ███████    ███████████   █████████
+	// ░░███░░░░░███░░███ ░░██████ ░░███   ███░░░░░███ ░░███░░░░░███ ███░░░░░███
+	//  ░███    ░███ ░███  ░███░███ ░███  ███     ░░███ ░███    ░███░███    ░░░
+	//  ░██████████  ░███  ░███░░███░███ ░███      ░███ ░██████████ ░░█████████
+	//  ░███░░░░░███ ░███  ░███ ░░██████ ░███      ░███ ░███░░░░░░   ░░░░░░░░███
+	//  ░███    ░███ ░███  ░███  ░░█████ ░░███     ███  ░███         ███    ░███
+	//  ███████████  █████ █████  ░░█████ ░░░███████░   █████       ░░█████████
+	// ░░░░░░░░░░░  ░░░░░ ░░░░░    ░░░░░    ░░░░░░░    ░░░░░         ░░░░░░░░░
+	// 	`
+
+	// 	m.applicationName = `
+	// ░▒▓███████▓▒░░▒▓█▓▒░▒▓███████▓▒░ ░▒▓██████▓▒░░▒▓███████▓▒░ ░▒▓███████▓▒░
+	// ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░
+	// ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░
+	// ░▒▓███████▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓███████▓▒░ ░▒▓██████▓▒░
+	// ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░             ░▒▓█▓▒░
+	// ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░             ░▒▓█▓▒░
+	// ░▒▓███████▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░░▒▓██████▓▒░░▒▓█▓▒░      ░▒▓███████▓▒░
 	// `
 
-// 	m.applicationName = `
-// ██████╗ ██╗███╗   ██╗ ██████╗ ██████╗ ███████╗
-// ██╔══██╗██║████╗  ██║██╔═══██╗██╔══██╗██╔════╝
-// ██████╔╝██║██╔██╗ ██║██║   ██║██████╔╝███████╗
-// ██╔══██╗██║██║╚██╗██║██║   ██║██╔═══╝ ╚════██║
-// ██████╔╝██║██║ ╚████║╚██████╔╝██║     ███████║
-// ╚═════╝ ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝     ╚══════╝
-// `
+	// 	m.applicationName = `
+	// ██████╗ ██╗███╗   ██╗ ██████╗ ██████╗ ███████╗
+	// ██╔══██╗██║████╗  ██║██╔═══██╗██╔══██╗██╔════╝
+	// ██████╔╝██║██╔██╗ ██║██║   ██║██████╔╝███████╗
+	// ██╔══██╗██║██║╚██╗██║██║   ██║██╔═══╝ ╚════██║
+	// ██████╔╝██║██║ ╚████║╚██████╔╝██║     ███████║
+	// ╚═════╝ ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚═╝     ╚══════╝
+	// `
 
- 	m.applicationName = `
+	m.applicationName = `
 ▀█████████▄   ▄█  ███▄▄▄▄    ▄██████▄     ▄███████▄    ▄████████ 
   ███    ███ ███  ███▀▀▀██▄ ███    ███   ███    ███   ███    ███ 
   ███    ███ ███▌ ███   ███ ███    ███   ███    ███   ███    █▀  
@@ -109,8 +131,8 @@ func initializeGeneralModel(width, height int, fileStats ELFStats, dependencies 
                                                                  	
 `
 
-// 	m.applicationName = `
-// `
+	// 	m.applicationName = `
+	// `
 
 	m.styles.title = lipgloss.NewStyle().Bold(true).Foreground(theme.PanelTitle)
 	m.styles.stats = lipgloss.NewStyle().
@@ -143,12 +165,12 @@ func (m GeneralModel) Update(msg tea.Msg) (GeneralModel, tea.Cmd) {
 			return m, nil
 		}
 		visibleDataRows := m.dependenciesDataRowsVisible()
-		switch msg.String() {
-		case "down", "j":
+		switch {
+		case key.Matches(msg, GeneralDefaultKeyMap.Down):
 			if m.dependenciesSelected < len(m.dependencies)-1 {
 				m.dependenciesSelected++
 			}
-		case "up", "k":
+		case key.Matches(msg, GeneralDefaultKeyMap.Up):
 			if m.dependenciesSelected > 0 {
 				m.dependenciesSelected--
 			}
@@ -166,7 +188,6 @@ func (m GeneralModel) Update(msg tea.Msg) (GeneralModel, tea.Cmd) {
 }
 
 func (m GeneralModel) View() string {
-
 	applicationName := lipgloss.NewStyle().Foreground(m.theme.Body).Render(m.applicationName)
 	description := m.styles.description.Render(m.description)
 	repository := lipgloss.NewStyle().Hyperlink(m.repository).Render(m.repository)
@@ -174,9 +195,9 @@ func (m GeneralModel) View() string {
 	properties := m.statsView()
 	dependencies := m.dependenciesView()
 
-	v := lipgloss.JoinVertical(lipgloss.Center, applicationName, description, repository, creator, properties, dependencies)
-	v = lipgloss.PlaceHorizontal(m.width, lipgloss.Center, v)
-	return v
+	content := lipgloss.JoinVertical(lipgloss.Center, applicationName, description, repository, creator, properties, dependencies)
+	content = lipgloss.Place(m.width, m.contentHeight(), lipgloss.Center, lipgloss.Top, content)
+	return lipgloss.JoinVertical(lipgloss.Left, content, m.helpView())
 }
 
 func (m *GeneralModel) setDimensions(width, height int) {
@@ -184,6 +205,22 @@ func (m *GeneralModel) setDimensions(width, height int) {
 	m.height = height
 	// m.styles.stats.Width(min(40, width-2)).Height(min(15, height-2))
 	// m.styles.dependencies.Width(min(60, width-2)).Height(min(7, height-2))
+}
+
+func (m GeneralModel) helpView() string {
+	km := GeneralDefaultKeyMap
+	enabled := len(m.dependencies) > 0
+	km.Up.SetEnabled(enabled)
+	km.Down.SetEnabled(enabled)
+	return renderHelpFooter(m.theme, m.width, km, DefaultAppKeyMap)
+}
+
+func (m GeneralModel) contentHeight() int {
+	km := GeneralDefaultKeyMap
+	enabled := len(m.dependencies) > 0
+	km.Up.SetEnabled(enabled)
+	km.Down.SetEnabled(enabled)
+	return max(1, m.height-helpFooterHeight(m.theme, m.width, km, DefaultAppKeyMap))
 }
 
 func (m GeneralModel) statsView() string {
@@ -307,7 +344,7 @@ func humanFileSize(bytes int64) string {
 
 func (m GeneralModel) dependenciesVisibleRows() int {
 	// Reserve a reasonable slice of the page for dependencies while allowing scrolling.
-	return max(4, min(12, m.height/3))
+	return max(4, min(12, m.contentHeight()/3))
 }
 
 func (m GeneralModel) dependenciesDataRowsVisible() int {

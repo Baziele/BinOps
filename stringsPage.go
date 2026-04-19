@@ -4,11 +4,36 @@ import (
 	"fmt"
 	"strings"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/mattn/go-runewidth"
 )
+
+type StringsKeyMap struct {
+	DecreaseMin key.Binding
+	IncreaseMin key.Binding
+}
+
+var StringsDefaultKeyMap = StringsKeyMap{
+	DecreaseMin: key.NewBinding(key.WithKeys("-"), key.WithHelp("-", "shorter strings")),
+	IncreaseMin: key.NewBinding(key.WithKeys("+", "="), key.WithHelp("+", "longer strings")),
+}
+
+func (km StringsKeyMap) ShortHelp() []key.Binding {
+	items := []key.Binding{shortHelpBinding("j/k", "scroll")}
+	if km.DecreaseMin.Enabled() {
+		items = append(items, shortHelpBinding("-/+", "min len"))
+	} else {
+		items = append(items, shortHelpBinding("+", "min len"))
+	}
+	return items
+}
+
+func (km StringsKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{km.ShortHelp()}
+}
 
 type StringsModel struct {
 	height int
@@ -71,14 +96,14 @@ func (m StringsModel) Init() tea.Cmd {
 func (m StringsModel) Update(msg tea.Msg) (StringsModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
-		switch msg.String() {
-		case "-":
+		switch {
+		case key.Matches(msg, StringsDefaultKeyMap.DecreaseMin):
 			if m.minLength > 1 {
 				m.minLength--
 				m.refreshContent()
 			}
 			return m, nil
-		case "+", "=":
+		case key.Matches(msg, StringsDefaultKeyMap.IncreaseMin):
 			m.minLength++
 			m.refreshContent()
 			return m, nil
@@ -100,7 +125,7 @@ func (m StringsModel) View() string {
 		Width(m.width).
 		Padding(0, 0, 0, 1).
 		Render(bodyContent)
-	return lipgloss.JoinVertical(lipgloss.Left, m.titleView(), body, m.footerView())
+	return lipgloss.JoinVertical(lipgloss.Left, m.titleView(), body, m.footerView(), m.helpView())
 }
 
 func (m StringsModel) titleView() string {
@@ -133,7 +158,8 @@ func (m *StringsModel) setDimensions(width, height int) {
 func (m StringsModel) viewportHeight(totalHeight int) int {
 	titleHeight := lipgloss.Height(m.styles.title.Render("┌|Strings|"))
 	footerHeight := lipgloss.Height(m.styles.footerInfo.Render("99999 shown"))
-	return max(1, totalHeight-titleHeight-footerHeight)
+	helpHeight := helpFooterHeight(m.theme, m.width, m.helpKeyMap(), DefaultAppKeyMap)
+	return max(1, totalHeight-titleHeight-footerHeight-helpHeight)
 }
 
 func (m *StringsModel) setStrings(entries []ELFStringEntry) {
@@ -196,6 +222,16 @@ func (m StringsModel) scrollbarView() string {
 		m.styles.border,
 		m.styles.border.Bold(true),
 	)
+}
+
+func (m StringsModel) helpKeyMap() StringsKeyMap {
+	km := StringsDefaultKeyMap
+	km.DecreaseMin.SetEnabled(m.minLength > 1)
+	return km
+}
+
+func (m StringsModel) helpView() string {
+	return renderHelpFooter(m.theme, m.width, m.helpKeyMap(), DefaultAppKeyMap)
 }
 
 func renderWrappedStringEntry(prefix, value string, width int, prefixStyle, valueStyle lipgloss.Style) string {

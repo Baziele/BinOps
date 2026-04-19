@@ -9,6 +9,7 @@ import (
 	// "strings"
 	// "time"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
@@ -30,7 +31,7 @@ type model struct {
 	}
 	generalPage GeneralModel
 	staticPage  StaticModel
-	dynamicPage tea.Model
+	dynamicPage DynamicModel
 	stringsPage StringsModel
 	hexdumpPage HexdumpModel
 	binaryName  string
@@ -75,15 +76,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
-		switch keypress := msg.String(); keypress {
-		case "ctrl+c", "q":
+		switch {
+		case key.Matches(msg, DefaultAppKeyMap.Quit):
 			return m, tea.Quit
-		case "tab":
+		case key.Matches(msg, DefaultAppKeyMap.NextPage):
 			if !m.isFileReady {
 				return m, nil
 			}
 			m.currentPage = (m.currentPage + 1) % len(m.pages)
-		case "shift+tab":
+		case key.Matches(msg, DefaultAppKeyMap.PrevPage):
 			if !m.isFileReady {
 				return m, nil
 			}
@@ -98,7 +99,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.height = msg.Height
 			m.generalPage = initializeGeneralModel(contentWidth, contentHeight, m.elfAnalysis.Stats, m.elfAnalysis.Dependencies, m.theme)
 			m.staticPage = initializeStaticModel(contentWidth, contentHeight, m.elfAnalysis.File, m.elfAnalysis.Header, m.elfAnalysis.NoteSections, m.elfAnalysis.SegmentTables, m.theme)
-			m.dynamicPage = initializeDynamicModel()
+			m.dynamicPage = initializeDynamicModel(contentWidth, contentHeight, m.theme)
 			m.stringsPage = initializeStringsModel(contentWidth, contentHeight, m.elfAnalysis.Strings, m.theme)
 			m.hexdumpPage = initializeHexdumpModel(contentWidth, contentHeight, m.binaryName, m.elfAnalysis.FileBytes, m.theme)
 			m.ready = true
@@ -107,6 +108,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.generalPage.setDimensions(contentWidth, contentHeight)
 		m.staticPage.setDimensions(contentWidth, contentHeight)
+		m.dynamicPage.setDimensions(contentWidth, contentHeight)
 		m.stringsPage.setDimensions(contentWidth, contentHeight)
 		m.hexdumpPage.setDimensions(contentWidth, contentHeight)
 
@@ -168,7 +170,7 @@ func (m model) View() tea.View {
 	case 1:
 		currentView = m.staticPage.View()
 	case 2:
-		currentView = m.dynamicPage.View().Content
+		currentView = m.dynamicPage.View()
 	case 3:
 		currentView = m.stringsPage.View()
 	case 4:
