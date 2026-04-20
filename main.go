@@ -9,11 +9,13 @@ import (
 	// "strings"
 	// "time"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
 const BUILDERSIO_URL = "0.1.0"
+
 type model struct {
 	ready       bool
 	isFileReady bool
@@ -23,13 +25,13 @@ type model struct {
 	height      int
 	theme       Theme
 
-	styles      struct {
+	styles struct {
 		borderStyles lipgloss.Style
-		navStyles lipgloss.Style
+		navStyles    lipgloss.Style
 	}
 	generalPage GeneralModel
 	staticPage  StaticModel
-	dynamicPage tea.Model
+	dynamicPage DynamicModel
 	stringsPage StringsModel
 	hexdumpPage HexdumpModel
 	binaryName  string
@@ -39,9 +41,8 @@ type model struct {
 // contentSize returns the inner dimensions for page content (inside border, below nav).
 func (m model) contentSize() (w, h int) {
 	navHeight := lipgloss.Height(m.navView())
-	borderWidth := lipgloss.Width(m.styles.borderStyles.Render(""))
-	borderHeight := lipgloss.Height(m.styles.borderStyles.Render(""))
-	return m.width - borderWidth, m.height - navHeight - borderHeight
+	return m.width - m.styles.borderStyles.GetHorizontalFrameSize(),
+		m.height - navHeight - m.styles.borderStyles.GetVerticalFrameSize()
 }
 
 func initializeModel(binaryName string) model {
@@ -75,15 +76,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
-		switch keypress := msg.String(); keypress {
-		case "ctrl+c", "q":
+		switch {
+		case key.Matches(msg, DefaultAppKeyMap.Quit):
 			return m, tea.Quit
-		case "tab":
+		case key.Matches(msg, DefaultAppKeyMap.NextPage):
 			if !m.isFileReady {
 				return m, nil
 			}
 			m.currentPage = (m.currentPage + 1) % len(m.pages)
-		case "shift+tab":
+		case key.Matches(msg, DefaultAppKeyMap.PrevPage):
 			if !m.isFileReady {
 				return m, nil
 			}
@@ -91,26 +92,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.WindowSizeMsg:
 		navHeight := lipgloss.Height(m.navView())
-		borderWidth := lipgloss.Width(m.styles.borderStyles.Render(""))
-		borderHeight := lipgloss.Height(m.styles.borderStyles.Render(""))
+		contentWidth := msg.Width - m.styles.borderStyles.GetHorizontalFrameSize()
+		contentHeight := msg.Height - navHeight - m.styles.borderStyles.GetVerticalFrameSize()
 		if !m.ready {
 			m.width = msg.Width
 			m.height = msg.Height
-			contentWidth := m.width - borderWidth
-			contentHeight := m.height - navHeight - borderHeight
 			m.generalPage = initializeGeneralModel(contentWidth, contentHeight, m.elfAnalysis.Stats, m.elfAnalysis.Dependencies, m.theme)
 			m.staticPage = initializeStaticModel(contentWidth, contentHeight, m.elfAnalysis.File, m.elfAnalysis.Header, m.elfAnalysis.NoteSections, m.elfAnalysis.SegmentTables, m.theme)
-			m.dynamicPage = initializeDynamicModel()
+			m.dynamicPage = initializeDynamicModel(contentWidth, contentHeight, m.theme)
 			m.stringsPage = initializeStringsModel(contentWidth, contentHeight, m.elfAnalysis.Strings, m.theme)
 			m.hexdumpPage = initializeHexdumpModel(contentWidth, contentHeight, m.binaryName, m.elfAnalysis.FileBytes, m.theme)
 			m.ready = true
 		}
 		m.width = msg.Width
 		m.height = msg.Height
-		m.generalPage.setDimensions(m.width-borderWidth, m.height-navHeight-borderHeight)
-		m.staticPage.setDimensions(m.width-borderWidth, m.height-navHeight-borderHeight)
-		m.stringsPage.setDimensions(m.width-borderWidth, m.height-navHeight-borderHeight)
-		m.hexdumpPage.setDimensions(m.width-borderWidth, m.height-navHeight-borderHeight)
+		m.generalPage.setDimensions(contentWidth, contentHeight)
+		m.staticPage.setDimensions(contentWidth, contentHeight)
+		m.dynamicPage.setDimensions(contentWidth, contentHeight)
+		m.stringsPage.setDimensions(contentWidth, contentHeight)
+		m.hexdumpPage.setDimensions(contentWidth, contentHeight)
 
 	case ELFAnalysis:
 		m.elfAnalysis = msg
@@ -170,14 +170,17 @@ func (m model) View() tea.View {
 	case 1:
 		currentView = m.staticPage.View()
 	case 2:
-		currentView = m.dynamicPage.View().Content
+		currentView = m.dynamicPage.View()
 	case 3:
 		currentView = m.stringsPage.View()
 	case 4:
 		currentView = m.hexdumpPage.View()
 	}
 	body := lipgloss.JoinVertical(lipgloss.Top, currentView)
-	body = m.styles.borderStyles.Width(m.width-2).Height(m.height - lipgloss.Height(nav)).Render(body)
+	body = m.styles.borderStyles.
+		Width(m.width - m.styles.borderStyles.GetHorizontalMargins()).
+		Height(m.height - lipgloss.Height(nav) - m.styles.borderStyles.GetVerticalMargins()).
+		Render(body)
 	v.SetContent(lipgloss.JoinVertical(lipgloss.Top, nav, body))
 	return v
 }
@@ -198,9 +201,8 @@ func (m model) navView() string {
 		}
 		str += style.Foreground(m.theme.NavAccent).Render(separator) + style.Render(page)
 	}
-	
 
-	return m.styles.navStyles.Width(m.width-2).Render(str)
+	return m.styles.navStyles.Width(m.width - 2).Render(str)
 }
 
 func main() {

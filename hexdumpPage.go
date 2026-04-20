@@ -161,6 +161,8 @@ type HexdumpModel struct {
 		hex             lipgloss.Style
 		ascii           lipgloss.Style
 		converter       lipgloss.Style
+		scrollTrack     lipgloss.Style
+		scrollThumb     lipgloss.Style
 		selectedAddress lipgloss.Style
 	}
 	palette       hexdumpPalette
@@ -178,6 +180,7 @@ type HexdumpKeyMap struct {
 	RowEnd       key.Binding
 	ToggleEndian key.Binding
 	ToggleEdit   key.Binding
+	CancelEdit   key.Binding
 	Save         key.Binding
 }
 
@@ -192,7 +195,25 @@ var HexdumpDefaultKeyMap = HexdumpKeyMap{
 	RowEnd:       key.NewBinding(key.WithKeys("end", "$"), key.WithHelp("end", "row end")),
 	ToggleEndian: key.NewBinding(key.WithKeys("n"), key.WithHelp("n", "toggle endian")),
 	ToggleEdit:   key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "edit mode")),
+	CancelEdit:   key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel edit")),
 	Save:         key.NewBinding(key.WithKeys("ctrl+s"), key.WithHelp("ctrl+s", "save")),
+}
+
+func (km HexdumpKeyMap) ShortHelp() []key.Binding {
+	items := []key.Binding{
+		shortHelpBinding("h/j/k/l", "scroll"),
+		shortHelpBinding("i", "edit"),
+		shortHelpBinding("n", "endian"),
+		shortHelpBinding("ctrl+s", "save"),
+	}
+	if km.CancelEdit.Enabled() {
+		items = append(items, shortHelpBinding("esc", "cancel"))
+	}
+	return items
+}
+
+func (km HexdumpKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{km.ShortHelp()}
 }
 
 const converterShortRead = "EOF"
@@ -252,6 +273,8 @@ func initializeHexdumpModel(width, height int, binaryPath string, fileBytes []by
 	m.styles.address = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(theme.Border).BorderTop(false)
 	m.styles.hex = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(theme.Border).BorderTop(false)
 	m.styles.ascii = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(theme.Border).BorderTop(false)
+	m.styles.scrollTrack = lipgloss.NewStyle().Foreground(theme.Subtle)
+	m.styles.scrollThumb = lipgloss.NewStyle().Foreground(theme.PanelTitle)
 	m.styles.selectedAddress = lipgloss.NewStyle().Background(theme.Hexdump.SelectedBG).Foreground(theme.Hexdump.SelectedFG).Bold(true)
 	m.setDimensions(width, height)
 	return m
@@ -313,7 +336,7 @@ func (m HexdumpModel) Update(msg tea.Msg) (HexdumpModel, tea.Cmd) {
 				m.invalidateAllRows()
 				return m, analyzeBinary(m.binaryPath)
 			}
-		case msg.String() == "esc":
+		case key.Matches(msg, HexdumpDefaultKeyMap.CancelEdit):
 			if m.view.editMode {
 				m.view.editMode = false
 				m.view.highNibble = true
@@ -334,7 +357,7 @@ func (m *HexdumpModel) setDimensions(width, height int) {
 	m.width = width
 	m.height = height
 	m.layout.addressWidth = 8
-	m.view.bytesPerRow = max(1, (width-13)/4)
+	m.view.bytesPerRow = max(1, (width-14)/4)
 	m.layout.hexWidth = max(2, m.view.bytesPerRow*3-1)
 	m.layout.asciiWidth = max(1, m.view.bytesPerRow)
 
@@ -348,7 +371,8 @@ func (m *HexdumpModel) setDimensions(width, height int) {
 		Height(2)
 
 	converterRowsHeight := lipgloss.Height(m.lowerConverterView())
-	m.view.visibleRows = max(1, height-converterRowsHeight-1)
+	helpHeight := helpFooterHeight(m.theme, m.width, m.helpKeyMap(), DefaultAppKeyMap)
+	m.view.visibleRows = max(1, height-converterRowsHeight-helpHeight-1)
 	m.ensureCursorInBounds()
 	m.ensureVisible()
 	m.invalidateAllRows()
@@ -584,14 +608,40 @@ func padLine(value string, width int) string {
 
 func (m HexdumpModel) View() string {
 	addressText, hexText, asciiText := m.renderVisibleRows()
+	asciiBody := lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		asciiText,
+		m.scrollbarView(),
+	)
 	upperView := lipgloss.JoinHorizontal(
 		lipgloss.Left,
 		m.renderPanel("Address", m.styles.address.Height(m.view.visibleRows).Render(addressText)),
 		m.renderPanel("Hex", m.styles.hex.Height(m.view.visibleRows).Render(hexText)),
-		m.renderPanel("ASCII", m.styles.ascii.Height(m.view.visibleRows).Render(asciiText)),
+		m.renderPanel("ASCII", m.styles.ascii.Height(m.view.visibleRows).Render(asciiBody)),
 	)
 	lowerView := m.lowerConverterView()
-	return lipgloss.JoinVertical(lipgloss.Left, upperView, lowerView)
+	return lipgloss.JoinVertical(lipgloss.Left, upperView, lowerView, m.helpView())
+}
+
+func (m HexdumpModel) helpKeyMap() HexdumpKeyMap {
+	km := HexdumpDefaultKeyMap
+	km.CancelEdit.SetEnabled(m.view.editMode)
+	return km
+}
+
+func (m HexdumpModel) helpView() string {
+	return renderHelpFooter(m.theme, m.width, m.helpKeyMap(), DefaultAppKeyMap)
+}
+
+func (m HexdumpModel) scrollbarView() string {
+	return renderVerticalScrollbar(
+		m.view.visibleRows,
+		m.totalRows(),
+		m.view.visibleRows,
+		m.view.topRow,
+		m.styles.scrollTrack,
+		m.styles.scrollThumb,
+	)
 }
 
 func (m HexdumpModel) renderPanel(titleText string, body string) string {
@@ -712,7 +762,13 @@ func (m HexdumpModel) convertBinary() string {
 }
 
 func (m HexdumpModel) convertOffset() string {
-	return m.renderConverter("Offset", strconv.FormatInt(int64(m.selectionStart()), 16))
+	offset := m.selectionStart()
+	width := 8
+	// Use wider hex padding when file length exceeds 32-bit offsets.
+	if m.document.Len() > 0xFFFFFFFF {
+		width = 16
+	}
+	return m.renderConverter("Offset", fmt.Sprintf("0x%0*X (%d)", width, offset, offset))
 }
 
 func (m HexdumpModel) convertUnsigned16Bit() string {

@@ -6,68 +6,93 @@ import (
 
 	"debug/elf"
 
-	goansi "github.com/charmbracelet/x/ansi"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/table"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	goansi "github.com/charmbracelet/x/ansi"
 	"github.com/mattn/go-runewidth"
 )
 
 type StaticModel struct {
-	width int
+	width  int
 	height int
-	theme Theme
-	styles struct{
-		title lipgloss.Style
-		header lipgloss.Style
-		fileSegment lipgloss.Style
+	theme  Theme
+	styles struct {
+		title            lipgloss.Style
+		header           lipgloss.Style
+		fileSegment      lipgloss.Style
 		fileSegmentTable table.Styles
 	}
-	header string
-	fileSegments []string
-	content string
-	currentSegment int
-	elfFile         *elf.File
-	elfHeader       ELFStaticHeader
-	elfNotes        []ELFNoteSection
-	segmentTables   []ELFStaticTable
+	header           string
+	fileSegments     []string
+	content          string
+	currentSegment   int
+	elfFile          *elf.File
+	elfHeader        ELFStaticHeader
+	elfNotes         []ELFNoteSection
+	segmentTables    []ELFStaticTable
 	fileSegmentTable table.Model
 	detailOpen       bool
 	detailContent    string
 }
 
-type KeyMap struct {
-    Left key.Binding
-    Right key.Binding
+type StaticKeyMap struct {
+	Left        key.Binding
+	Right       key.Binding
+	OpenDetail  key.Binding
+	CloseDetail key.Binding
 }
 
-var DefaultKeyMap = KeyMap{
-    Left: key.NewBinding(
-        key.WithKeys("h", "left"),        // actual keybindings
-        key.WithHelp("←/h", "move left"), // corresponding help text
-    ),
-    Right: key.NewBinding(
-        key.WithKeys("l", "right"),
-        key.WithHelp("→/l", "move right"),
-    ),
+var StaticDefaultKeyMap = StaticKeyMap{
+	Left: key.NewBinding(
+		key.WithKeys("h", "left"),        // actual keybindings
+		key.WithHelp("←/h", "move left"), // corresponding help text
+	),
+	Right: key.NewBinding(
+		key.WithKeys("l", "right"),
+		key.WithHelp("→/l", "move right"),
+	),
+	OpenDetail: key.NewBinding(
+		key.WithKeys("enter"),
+		key.WithHelp("enter", "open row")),
+	CloseDetail: key.NewBinding(
+		key.WithKeys("esc", "enter"),
+		key.WithHelp("esc", "close detail")),
 }
 
+func (km StaticKeyMap) ShortHelp() []key.Binding {
+	if km.CloseDetail.Enabled() {
+		return []key.Binding{shortHelpBinding("esc/enter", "close detail")}
+	}
+	var items []key.Binding
+	if km.Left.Enabled() || km.Right.Enabled() {
+		items = append(items, shortHelpBinding("h/l", "section"))
+	}
+	items = append(items, shortHelpBinding("j/k", "scroll"))
+	if km.OpenDetail.Enabled() {
+		items = append(items, shortHelpBinding("enter", "row"))
+	}
+	return items
+}
 
+func (km StaticKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{km.ShortHelp()}
+}
 
 func initializeStaticModel(width, height int, elfFile *elf.File, header ELFStaticHeader, notes []ELFNoteSection, segmentTables []ELFStaticTable, theme Theme) StaticModel {
 	if segmentTables == nil {
 		segmentTables = ParseELFSegmentTables(elfFile)
 	}
 	m := StaticModel{
-		width: width,
-		height: height,
-		theme: theme,
-		fileSegments: []string{"Program Header", "Section Header", "Symbols", "Dynamic Symbol", "Dynamic", "Relocations"},
-		content: "Static",
-		elfFile: elfFile,
-		elfHeader: header,
-		elfNotes: notes,
+		width:         width,
+		height:        height,
+		theme:         theme,
+		fileSegments:  []string{"Program Header", "Section Header", "Symbols", "Dynamic Symbol", "Dynamic", "Relocations"},
+		content:       "Static",
+		elfFile:       elfFile,
+		elfHeader:     header,
+		elfNotes:      notes,
 		segmentTables: segmentTables,
 		fileSegmentTable: table.New(
 			table.WithColumns([]table.Column{{Title: " ", Width: max(6, width-4)}}),
@@ -82,7 +107,7 @@ func initializeStaticModel(width, height int, elfFile *elf.File, header ELFStati
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(theme.Border).
 		BorderTop(false).
-		Width(m.width/2).
+		Width(m.width / 2).
 		Height(max(1, m.topPanelHeight()-1)).
 		Margin(0)
 	m.styles.fileSegment = lipgloss.NewStyle().
@@ -92,21 +117,20 @@ func initializeStaticModel(width, height int, elfFile *elf.File, header ELFStati
 		Width(m.width).
 		Height(max(1, m.bottomPanelHeight()-1)).
 		Margin(0)
-	m.styles.fileSegmentTable = themedStaticTableStyles(theme)
+	m.styles.fileSegmentTable = themedStaticTableStyles(theme, 1)
 	m.fileSegmentTable.SetStyles(m.styles.fileSegmentTable)
 	(&m).refreshFileSegmentTable()
 	return m
 }
 
-func themedStaticTableStyles(theme Theme) table.Styles {
+func themedStaticTableStyles(theme Theme, cellPadding int) table.Styles {
 	return table.Styles{
 		Header: lipgloss.NewStyle().
 			Bold(true).
 			Foreground(theme.Label).
-			Padding(0, 1),
+			Padding(0, cellPadding),
 		Cell: lipgloss.NewStyle().
-			Foreground(theme.Body).
-			Padding(0, 1),
+			Padding(0, cellPadding),
 		Selected: lipgloss.NewStyle().
 			Bold(true).
 			Foreground(theme.SelectionFG).
@@ -114,16 +138,15 @@ func themedStaticTableStyles(theme Theme) table.Styles {
 	}
 }
 
-
-func (m StaticModel) Init() tea.Cmd{
+func (m StaticModel) Init() tea.Cmd {
 	return nil
 }
 
 func (m StaticModel) Update(msg tea.Msg) (StaticModel, tea.Cmd) {
 	if m.detailOpen {
 		if kp, ok := msg.(tea.KeyPressMsg); ok {
-			switch kp.String() {
-			case "esc", "q", "enter":
+			switch {
+			case key.Matches(kp, StaticDefaultKeyMap.CloseDetail):
 				m.detailOpen = false
 				return m, nil
 			}
@@ -134,7 +157,7 @@ func (m StaticModel) Update(msg tea.Msg) (StaticModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch {
-		case key.Matches(msg, DefaultKeyMap.Left):
+		case key.Matches(msg, StaticDefaultKeyMap.Left):
 			if len(m.fileSegments) == 0 {
 				return m, nil
 			}
@@ -142,7 +165,7 @@ func (m StaticModel) Update(msg tea.Msg) (StaticModel, tea.Cmd) {
 			m.currentSegment = (m.currentSegment - 1 + n) % n
 			m.refreshFileSegmentTable()
 			return m, nil
-		case key.Matches(msg, DefaultKeyMap.Right):
+		case key.Matches(msg, StaticDefaultKeyMap.Right):
 			if len(m.fileSegments) == 0 {
 				return m, nil
 			}
@@ -150,7 +173,7 @@ func (m StaticModel) Update(msg tea.Msg) (StaticModel, tea.Cmd) {
 			m.currentSegment = (m.currentSegment + 1) % n
 			m.refreshFileSegmentTable()
 			return m, nil
-		case msg.String() == "enter":
+		case key.Matches(msg, StaticDefaultKeyMap.OpenDetail):
 			if len(m.segmentTables) == 0 || m.currentSegment < 0 || m.currentSegment >= len(m.segmentTables) {
 				break
 			}
@@ -172,16 +195,15 @@ func (m StaticModel) Update(msg tea.Msg) (StaticModel, tea.Cmd) {
 	return m, tcmd
 }
 
-
 func (m StaticModel) View() string {
 	base := lipgloss.JoinVertical(lipgloss.Left,
 		lipgloss.JoinHorizontal(lipgloss.Center, m.headerView(), m.notesView()),
 		m.fileSegmentsView())
 	if !m.detailOpen {
-		return base
+		return lipgloss.JoinVertical(lipgloss.Left, base, m.helpView())
 	}
 	panel := m.renderDetailPanel()
-	return overlayCenter(base, panel, m.width, m.height)
+	return lipgloss.JoinVertical(lipgloss.Left, overlayCenter(base, panel, m.width, m.contentHeight()), m.helpView())
 }
 
 func (m StaticModel) renderDetailPanel() string {
@@ -212,19 +234,20 @@ func (m StaticModel) renderDetailPanel() string {
 }
 
 func (m StaticModel) topPanelHeight() int {
-	if m.height <= 1 {
+	contentHeight := m.contentHeight()
+	if contentHeight <= 1 {
 		return 1
 	}
-	return max(1, m.height/2)
+	return max(1, contentHeight/2)
 }
 
 func (m StaticModel) bottomPanelHeight() int {
-	return max(1, m.height-m.topPanelHeight())
+	return max(1, m.contentHeight()-m.topPanelHeight())
 }
 
-func (m StaticModel) headerView() string{
-	title := m.styles.title.Render("┌┤Headers├")
-	line := strings.Repeat("─", max(0, (m.width/2)-lipgloss.Width(title) - 1))
+func (m StaticModel) headerView() string {
+	title := m.styles.title.Render("┌|Headers|")
+	line := strings.Repeat("─", max(0, (m.width/2)-lipgloss.Width(title)-1))
 	line = lipgloss.JoinHorizontal(lipgloss.Center, title, line, "┐")
 	labelStyle := lipgloss.NewStyle().Foreground(m.theme.Label)
 	panelContentH := max(1, m.topPanelHeight()-lipgloss.Height(line))
@@ -261,20 +284,20 @@ func (m StaticModel) headerView() string{
 }
 
 func (m StaticModel) notesView() string {
-	title := m.styles.title.Render("┌┤Notes├")
+	title := m.styles.title.Render("┌|Notes|")
 	line := strings.Repeat("─", max(0, (m.width/2)-lipgloss.Width(title)-1))
 	line = lipgloss.JoinHorizontal(lipgloss.Center, title, line, "┐")
 	innerH := max(1, m.topPanelHeight()-lipgloss.Height(line))
+	innerW := max(16, m.styles.header.GetWidth()-m.styles.header.GetHorizontalFrameSize())
 
-	displayStyle := lipgloss.NewStyle().Foreground(m.theme.PanelTitle)
+	displayStyle := lipgloss.NewStyle().Foreground(m.theme.PanelTitle).Bold(true)
 	sectionStyle := lipgloss.NewStyle().Foreground(m.theme.NavAccent).Bold(true)
-	tableHeaderStyle := lipgloss.NewStyle().Foreground(m.theme.Muted)
+	labelStyle := lipgloss.NewStyle().Foreground(m.theme.Label)
 	ownerStyle := lipgloss.NewStyle().Foreground(m.theme.Body)
 	sizeStyle := lipgloss.NewStyle().Foreground(m.theme.Warning)
 	descStyle := lipgloss.NewStyle().Foreground(m.theme.Body)
 	detailKeyStyle := lipgloss.NewStyle().Foreground(m.theme.Label)
 	detailMutedStyle := lipgloss.NewStyle().Foreground(m.theme.MutedStrong)
-
 	if m.elfFile == nil {
 		body := m.styles.header.Height(innerH).Render("No ELF file loaded.")
 		return lipgloss.JoinVertical(lipgloss.Left, line, body)
@@ -285,33 +308,37 @@ func (m StaticModel) notesView() string {
 	}
 
 	var b strings.Builder
-	for _, sec := range m.elfNotes {
-		b.WriteString(displayStyle.Render("Displaying notes found in: "))
+	for secIdx, sec := range m.elfNotes {
+		if secIdx > 0 {
+			b.WriteByte('\n')
+			b.WriteByte('\n')
+		}
+		b.WriteString(displayStyle.Render("Section"))
+		b.WriteString(" ")
 		b.WriteString(sectionStyle.Render(sec.SectionName))
 		b.WriteByte('\n')
-		b.WriteString(tableHeaderStyle.Render("  Owner                Data size        Description"))
-		b.WriteByte('\n')
-		for _, e := range sec.Entries {
+		for entryIdx, e := range sec.Entries {
+			if entryIdx > 0 {
+				b.WriteByte('\n')
+			}
 			sizeStr := fmt.Sprintf("0x%08x", e.DataSize)
-			b.WriteString("  ")
-			b.WriteString(ownerStyle.Render(fmt.Sprintf("%-20s", e.Owner)))
-			b.WriteString(" ")
-			b.WriteString(sizeStyle.Render(fmt.Sprintf("%-16s", sizeStr)))
-			b.WriteString(" ")
-			b.WriteString(descStyle.Render(e.Description))
+			b.WriteString(renderWrappedNoteField("Owner", e.Owner, innerW, labelStyle, ownerStyle))
 			b.WriteByte('\n')
+			b.WriteString(renderWrappedNoteField("Size", sizeStr, innerW, labelStyle, sizeStyle))
+			b.WriteByte('\n')
+			b.WriteString(renderWrappedNoteField("Description", e.Description, innerW, labelStyle, descStyle))
 			for _, d := range e.Details {
-				writeNoteDetailLine(&b, d, detailKeyStyle, detailMutedStyle)
+				b.WriteByte('\n')
+				writeNoteDetailLine(&b, d, innerW, detailKeyStyle, detailMutedStyle, ownerStyle)
 			}
 		}
-		b.WriteByte('\n')
 	}
 	notes := m.styles.header.Height(innerH).Render(strings.TrimSuffix(b.String(), "\n"))
 	return lipgloss.JoinVertical(lipgloss.Left, line, notes)
 }
 
 // writeNoteDetailLine colors leading indentation and a "Key:" prefix like readelf output.
-func writeNoteDetailLine(b *strings.Builder, line string, keyStyle, mutedStyle lipgloss.Style) {
+func writeNoteDetailLine(b *strings.Builder, line string, width int, keyStyle, mutedStyle, bodyStyle lipgloss.Style) {
 	if line == "" {
 		return
 	}
@@ -319,24 +346,149 @@ func writeNoteDetailLine(b *strings.Builder, line string, keyStyle, mutedStyle l
 	for trimStart < len(line) && line[trimStart] == ' ' {
 		trimStart++
 	}
-	pad := line[:trimStart]
 	rest := line[trimStart:]
-	b.WriteString(pad)
+	indent := min(trimStart, max(0, width-6))
+	prefix := strings.Repeat(" ", indent)
 	if strings.HasPrefix(rest, "Properties:") {
-		b.WriteString(mutedStyle.Render(rest))
-		b.WriteByte('\n')
+		b.WriteString(renderWrappedStyledBlock(prefix, rest, width, mutedStyle))
 		return
 	}
 	if idx := strings.Index(rest, ": "); idx >= 0 {
 		key := rest[:idx+1]
 		val := rest[idx+2:]
-		b.WriteString(keyStyle.Render(key))
-		b.WriteString(val)
-		b.WriteByte('\n')
+		labelPrefix := prefix + key
+		b.WriteString(renderWrappedStyledValue(labelPrefix, val, width, keyStyle, bodyStyle))
 		return
 	}
-	b.WriteString(rest)
-	b.WriteByte('\n')
+	b.WriteString(renderWrappedStyledBlock(prefix, rest, width, bodyStyle))
+}
+
+func renderWrappedNoteField(label, value string, width int, labelStyle, valueStyle lipgloss.Style) string {
+	return renderWrappedStyledValue(label+": ", value, width, labelStyle, valueStyle)
+}
+
+func renderWrappedStyledValue(prefix, value string, width int, prefixStyle, valueStyle lipgloss.Style) string {
+	usableWidth := max(8, width)
+	prefixWidth := runewidth.StringWidth(prefix)
+	if prefixWidth >= usableWidth-2 {
+		prefixWidth = 0
+		prefix = ""
+	}
+	valueWidth := max(8, usableWidth-prefixWidth)
+	wrapped := wrapVisualText(strings.TrimSpace(value), valueWidth)
+	lines := strings.Split(wrapped, "\n")
+	if len(lines) == 0 {
+		lines = []string{""}
+	}
+
+	var out strings.Builder
+	continuationPrefix := strings.Repeat(" ", prefixWidth)
+	for i, line := range lines {
+		if i > 0 {
+			out.WriteByte('\n')
+		}
+		if i == 0 {
+			out.WriteString(prefixStyle.Render(prefix))
+		} else if prefixWidth > 0 {
+			out.WriteString(continuationPrefix)
+		}
+		out.WriteString(valueStyle.Render(line))
+	}
+	return out.String()
+}
+
+func renderWrappedStyledBlock(prefix, value string, width int, style lipgloss.Style) string {
+	usableWidth := max(8, width)
+	prefixWidth := runewidth.StringWidth(prefix)
+	textWidth := max(8, usableWidth-prefixWidth)
+	wrapped := wrapVisualText(strings.TrimSpace(value), textWidth)
+	lines := strings.Split(wrapped, "\n")
+
+	var out strings.Builder
+	for i, line := range lines {
+		if i > 0 {
+			out.WriteByte('\n')
+		}
+		out.WriteString(prefix)
+		out.WriteString(style.Render(line))
+	}
+	return out.String()
+}
+
+func wrapVisualText(s string, width int) string {
+	s = strings.TrimSpace(strings.ReplaceAll(s, "\t", " "))
+	if s == "" {
+		return ""
+	}
+	width = max(8, width)
+
+	words := strings.Fields(s)
+	if len(words) == 0 {
+		return ""
+	}
+
+	var lines []string
+	current := ""
+	for _, piece := range splitVisualWord(words[0], width) {
+		if current == "" {
+			current = piece
+			continue
+		}
+		lines = append(lines, current)
+		current = piece
+	}
+	for _, word := range words[1:] {
+		wordParts := splitVisualWord(word, width)
+		candidate := current + " " + wordParts[0]
+		if runewidth.StringWidth(candidate) <= width {
+			current = candidate
+		} else {
+			if current != "" {
+				lines = append(lines, current)
+			}
+			current = wordParts[0]
+		}
+		for _, part := range wordParts[1:] {
+			if current != "" {
+				lines = append(lines, current)
+			}
+			current = part
+		}
+	}
+	if current != "" {
+		lines = append(lines, current)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func splitVisualWord(word string, width int) []string {
+	if word == "" {
+		return []string{""}
+	}
+	if runewidth.StringWidth(word) <= width {
+		return []string{word}
+	}
+
+	var parts []string
+	var b strings.Builder
+	currentWidth := 0
+	for _, r := range word {
+		rw := runewidth.RuneWidth(r)
+		if rw <= 0 {
+			rw = 1
+		}
+		if currentWidth+rw > width && b.Len() > 0 {
+			parts = append(parts, b.String())
+			b.Reset()
+			currentWidth = 0
+		}
+		b.WriteRune(r)
+		currentWidth += rw
+	}
+	if b.Len() > 0 {
+		parts = append(parts, b.String())
+	}
+	return parts
 }
 
 func (m StaticModel) fileSegmentTabLine() string {
@@ -379,26 +531,29 @@ func (m StaticModel) fileSegmentsView() string {
 		segIdx = (m.currentSegment%len(m.fileSegments) + len(m.fileSegments)) % len(m.fileSegments)
 	}
 	segTitle := m.styles.title.Render(clipVisual(m.fileSegments[segIdx], max(8, innerW-2)))
+	tableView := lipgloss.NewStyle().
+		Foreground(m.theme.Body).
+		Render(m.fileSegmentTable.View())
 	tableBox := lipgloss.NewStyle().
 		Width(innerW).
 		MaxWidth(innerW).
 		Height(max(1, innerH-lipgloss.Height(segTitle))).
 		MaxHeight(max(1, innerH-lipgloss.Height(segTitle))).
-		Render(m.fileSegmentTable.View())
+		Render(tableView)
 	contents := m.styles.fileSegment.Height(panelContentH).Render(lipgloss.JoinVertical(lipgloss.Left, segTitle, tableBox))
 
 	return lipgloss.JoinVertical(lipgloss.Left, line, contents)
 }
 
-
-func (m *StaticModel) setDimensions(width, height int){
+func (m *StaticModel) setDimensions(width, height int) {
 	m.width = width
 	m.height = height
+	m.styles.title = lipgloss.NewStyle().Bold(true).Foreground(m.theme.PanelTitle)
 	m.styles.header = lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(m.theme.Border).
 		BorderTop(false).
-		Width(m.width/2).
+		Width(m.width / 2).
 		Height(max(1, m.topPanelHeight()-1))
 	m.styles.fileSegment = lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
@@ -407,9 +562,26 @@ func (m *StaticModel) setDimensions(width, height int){
 		Width(m.width).
 		Height(max(1, m.bottomPanelHeight()-1)).
 		Margin(0)
-	m.styles.fileSegmentTable = themedStaticTableStyles(m.theme)
+	m.styles.fileSegmentTable = themedStaticTableStyles(m.theme, 1)
 	m.fileSegmentTable.SetStyles(m.styles.fileSegmentTable)
 	m.refreshFileSegmentTable()
+}
+
+func (m StaticModel) helpKeyMap() StaticKeyMap {
+	km := StaticDefaultKeyMap
+	km.CloseDetail.SetEnabled(m.detailOpen)
+	km.Left.SetEnabled(!m.detailOpen && len(m.fileSegments) > 0)
+	km.Right.SetEnabled(!m.detailOpen && len(m.fileSegments) > 0)
+	km.OpenDetail.SetEnabled(!m.detailOpen)
+	return km
+}
+
+func (m StaticModel) helpView() string {
+	return renderHelpFooter(m.theme, m.width, m.helpKeyMap(), DefaultAppKeyMap)
+}
+
+func (m StaticModel) contentHeight() int {
+	return max(1, m.height-helpFooterHeight(m.theme, m.width, m.helpKeyMap(), DefaultAppKeyMap))
 }
 
 func (m *StaticModel) refreshFileSegmentTable() {
@@ -437,8 +609,11 @@ func (m *StaticModel) refreshFileSegmentTable() {
 	avail := max(1, innerH-segTitleH)
 	tableOuter := max(3, avail)
 	tableWidth := m.fileSegmentPanelInnerWidth()
+	tablePadding := staticTableCellPadding(tableWidth, 1)
 
 	setFallback := func(msg string) {
+		m.styles.fileSegmentTable = themedStaticTableStyles(m.theme, tablePadding)
+		m.fileSegmentTable.SetStyles(m.styles.fileSegmentTable)
 		m.fileSegmentTable.SetWidth(tableWidth)
 		// Reconfigure safely: columns updates render previous rows immediately.
 		// Put a zero-cell row first so render cannot index past columns.
@@ -460,7 +635,10 @@ func (m *StaticModel) refreshFileSegmentTable() {
 	}
 
 	rows := tableRowsNormalized(seg.Rows, len(seg.Headers))
-	cols := tableColumnsFromHeaders(seg.Headers, rows, tableWidth, m.currentSegment)
+	tablePadding = staticTableCellPadding(tableWidth, len(seg.Headers))
+	m.styles.fileSegmentTable = themedStaticTableStyles(m.theme, tablePadding)
+	m.fileSegmentTable.SetStyles(m.styles.fileSegmentTable)
+	cols := tableColumnsFromHeaders(seg.Headers, rows, tableWidth, m.currentSegment, tablePadding)
 	if len(rows) == 0 {
 		// Empty body: bubbles leaves cursor at -1 for 0 rows; SetCursor(0) does not fix it.
 		placeholder := make(table.Row, len(seg.Headers))
@@ -496,33 +674,42 @@ func shortStaticTableHeader(h string) string {
 	}
 }
 
-func tableColumnsFromHeaders(headers []string, rows []table.Row, totalWidth int, segmentIdx int) []table.Column {
-	tw := totalWidth - 2
-	if tw < 8 {
-		tw = 8
-	}
+func tableColumnsFromHeaders(headers []string, rows []table.Row, totalWidth int, segmentIdx int, cellPadding int) []table.Column {
 	n := len(headers)
 	if n == 0 {
 		return nil
 	}
 
-	// Use actual content widths — no proportional inflation.
+	tw := totalWidth - (n * cellPadding * 2)
+	if tw < n {
+		tw = n
+	}
+
+	minColWidth := 3
+	if tw < n*minColWidth {
+		minColWidth = max(1, tw/n)
+	}
+
+	// Keep both the natural width (true content size) and a softer preferred
+	// width that keeps dense tables compact until there is room to breathe.
 	widths := make([]int, n)
+	naturalWidths := make([]int, n)
 	for j, h := range headers {
 		title := shortStaticTableHeader(h)
-		w := max(runewidth.StringWidth(title), 3)
+		natural := max(runewidth.StringWidth(title), minColWidth)
 		for _, r := range rows {
 			if j < len(r) {
 				cw := runewidth.StringWidth(r[j])
-				if cw > w {
-					w = cw
+				if cw > natural {
+					natural = cw
 				}
 			}
 		}
-		if cap := staticColumnMaxWidth(segmentIdx, h); cap > 0 && w > cap {
-			w = cap
+		naturalWidths[j] = natural
+		widths[j] = natural
+		if cap := staticColumnMaxWidth(segmentIdx, h); cap > 0 && widths[j] > cap {
+			widths[j] = cap
 		}
-		widths[j] = w
 	}
 
 	// If total natural width exceeds tw, trim the widest columns first.
@@ -540,19 +727,43 @@ func tableColumnsFromHeaders(headers []string, rows []table.Row, totalWidth int,
 				best = k
 			}
 		}
-		if widths[best] <= 3 {
+		if widths[best] <= minColWidth {
 			break
 		}
 		widths[best]--
 	}
 
-	// Give any leftover space only to the last column so no gaps appear mid-table.
+	// First, expand capped columns back toward their natural size when space
+	// allows, so wide layouts don't leave most of the table cramped.
 	total := 0
 	for _, w := range widths {
 		total += w
 	}
 	if total < tw && n > 0 {
-		widths[n-1] += tw - total
+		extra := tw - total
+		for extra > 0 {
+			progressed := false
+			for j := range widths {
+				if widths[j] >= naturalWidths[j] {
+					continue
+				}
+				widths[j]++
+				extra--
+				progressed = true
+				if extra == 0 {
+					break
+				}
+			}
+			if !progressed {
+				break
+			}
+		}
+		if extra > 0 {
+			for j := 0; extra > 0; j = (j + 1) % n {
+				widths[j]++
+				extra--
+			}
+		}
 	}
 
 	cols := make([]table.Column, n)
@@ -564,6 +775,19 @@ func tableColumnsFromHeaders(headers []string, rows []table.Row, totalWidth int,
 		cols[j] = table.Column{Title: title, Width: widths[j]}
 	}
 	return cols
+}
+
+func staticTableCellPadding(totalWidth, columnCount int) int {
+	if columnCount <= 0 {
+		return 1
+	}
+
+	// Prefer some spacing, but switch to a compact layout before padding causes
+	// dense tables to overflow narrow terminals.
+	if totalWidth-(columnCount*2) < columnCount*3 {
+		return 0
+	}
+	return 1
 }
 
 func staticColumnMaxWidth(segmentIdx int, header string) int {

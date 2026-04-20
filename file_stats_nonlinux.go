@@ -4,4 +4,4 @@ package main
 
 import "os"
 
-func populateELFStats(_ *ELFStats, _ os.FileInfo) {}
+func populateELFStats(_ *ELFStats, _ string, _ os.FileInfo) {}
