@@ -17,7 +17,7 @@ func initializeDynamicModel(width, height int, theme Theme) DynamicModel {
 		width:   width,
 		height:  height,
 		theme:   theme,
-		content: "Dynamic",
+		content: "Coming soon",
 	}
 }
 

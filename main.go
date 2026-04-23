@@ -12,6 +12,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/colorprofile"
 )
 
 const BUILDERSIO_URL = "0.1.0"
@@ -206,9 +207,12 @@ func (m model) navView() string {
 }
 
 func main() {
-	p := tea.NewProgram(
-		initializeModel(os.Args[1]),
-	)
+	opts := []tea.ProgramOption{}
+	if os.Getenv("BINOPS_FORCE_COLOR") == "1" {
+		opts = append(opts, tea.WithColorProfile(colorprofile.TrueColor))
+	}
+
+	p := tea.NewProgram(initializeModel(os.Args[1]), opts...)
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running program: %v", err)
