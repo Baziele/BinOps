@@ -1,6 +1,7 @@
 BinOps
 binops
 .vscode
+.cursor
 .idea
 .DS_Store
 .env
